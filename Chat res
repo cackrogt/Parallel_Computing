@@ -1,0 +1,49 @@
+javascript:(function() {
+    var elements = document.querySelectorAll(".sapMText, .sapUiLbl, .sapUiTf"); 
+    var textArray = Array.from(elements).map(el => el.innerText || el.value).join(" | ");
+    window.AndroidInterface.sendExtractedText(textArray);
+})();
+
+javascript:(function() {
+    function getDeepText(node) {
+        if (node.shadowRoot) {
+            return Array.from(node.shadowRoot.children).map(getDeepText).join(" ");
+        }
+        return node.innerText || "";
+    }
+    var text = getDeepText(document.body);
+    window.AndroidInterface.sendExtractedText(text);
+})();
+
+
+javascript:(function() {
+    var iframes = document.querySelectorAll("iframe");
+    var textContent = Array.from(iframes).map(frame => frame.contentDocument?.body.innerText || "").join(" | ");
+    window.AndroidInterface.sendExtractedText(textContent);
+})();
+
+webView.setWebChromeClient(new WebChromeClient() {
+    @Override
+    public void onProgressChanged(WebView view, int newProgress) {
+        if (newProgress == 100) { // Page fully loaded
+            extractSAPText(view);
+        }
+    }
+});
+
+private void extractSAPText(WebView webView) {
+    String js = "javascript:(function() {" +
+                "  var elements = document.querySelectorAll('.sapMText, .sapUiLbl, .sapUiTf');" +
+                "  var textArray = Array.from(elements).map(el => el.innerText || el.value).join(' | ');" +
+                "  window.AndroidInterface.sendExtractedText(textArray);" +
+                "})();";
+    webView.evaluateJavascript(js, null);
+}
+
+webView.addJavascriptInterface(new Object() {
+    @android.webkit.JavascriptInterface
+    public void sendExtractedText(String text) {
+        System.out.println("Extracted SAP Text: " + text);
+    }
+}, "AndroidInterface");
+
