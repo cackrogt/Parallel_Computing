@@ -46,4 +46,35 @@ webView.addJavascriptInterface(new Object() {
         System.out.println("Extracted SAP Text: " + text);
     }
 }, "AndroidInterface");
+public class OffscreenPageLoader {
+    private WebContents webContents;
 
+    public OffscreenPageLoader(Context context) {
+        // Get the last used profile (you may need to initialize it properly)
+        Profile profile = Profile.getLastUsedRegularProfile();
+        
+        // Create an offscreen WebContents
+        webContents = WebContentsFactory.createWebContents(profile, /* initiallyHidden= */ true);
+
+        // Set a delegate to handle events
+        webContents.setDelegate(new WebContentsDelegateAndroid() {
+            @Override
+            public void didFinishLoad(long frameId, String validatedUrl, boolean isMainFrame) {
+                if (isMainFrame) {
+                    extractText();
+                }
+            }
+        });
+
+        // Load the URL
+        NavigationController navigationController = webContents.getNavigationController();
+        navigationController.loadUrl(new LoadUrlParams("https://example.com"));
+    }
+
+    private void extractText() {
+        String script = "document.body.innerText";
+        webContents.evaluateJavaScript(script, value -> {
+            Log.d("ExtractedText", value);
+        });
+    }
+}
