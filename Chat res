@@ -1,80 +1,45 @@
-javascript:(function() {
-    var elements = document.querySelectorAll(".sapMText, .sapUiLbl, .sapUiTf"); 
-    var textArray = Array.from(elements).map(el => el.innerText || el.value).join(" | ");
-    window.AndroidInterface.sendExtractedText(textArray);
-})();
+#include "third_party/blink/renderer/core/dom/document.h"
+#include "third_party/blink/renderer/core/dom/mutation_observer.h"
+#include "third_party/blink/renderer/core/dom/mutation_observer_registration.h"
+#include "third_party/blink/renderer/core/dom/mutation_record.h"
 
-javascript:(function() {
-    function getDeepText(node) {
-        if (node.shadowRoot) {
-            return Array.from(node.shadowRoot.children).map(getDeepText).join(" ");
-        }
-        return node.innerText || "";
+namespace blink {
+
+class DynamicElementObserver {
+ public:
+    explicit DynamicElementObserver(Document* document) : document_(document) {
+        SetupObserver();
     }
-    var text = getDeepText(document.body);
-    window.AndroidInterface.sendExtractedText(text);
-})();
 
+    void SetupObserver() {
+        MutationObserverOptions options;
+        options.child_list = true; // Observe child additions/removals
+        options.subtree = true;    // Observe changes throughout the entire subtree
 
-javascript:(function() {
-    var iframes = document.querySelectorAll("iframe");
-    var textContent = Array.from(iframes).map(frame => frame.contentDocument?.body.innerText || "").join(" | ");
-    window.AndroidInterface.sendExtractedText(textContent);
-})();
+        observer_ = MutationObserver::Create(
+            document_, 
+            WTF::Bind(&DynamicElementObserver::OnMutation, WrapWeakPersistent(this))
+        );
 
-webView.setWebChromeClient(new WebChromeClient() {
-    @Override
-    public void onProgressChanged(WebView view, int newProgress) {
-        if (newProgress == 100) { // Page fully loaded
-            extractSAPText(view);
-        }
+        observer_->observe(document_->body(), options);
     }
-});
 
-private void extractSAPText(WebView webView) {
-    String js = "javascript:(function() {" +
-                "  var elements = document.querySelectorAll('.sapMText, .sapUiLbl, .sapUiTf');" +
-                "  var textArray = Array.from(elements).map(el => el.innerText || el.value).join(' | ');" +
-                "  window.AndroidInterface.sendExtractedText(textArray);" +
-                "})();";
-    webView.evaluateJavascript(js, null);
-}
-
-webView.addJavascriptInterface(new Object() {
-    @android.webkit.JavascriptInterface
-    public void sendExtractedText(String text) {
-        System.out.println("Extracted SAP Text: " + text);
-    }
-}, "AndroidInterface");
-public class OffscreenPageLoader {
-    private WebContents webContents;
-
-    public OffscreenPageLoader(Context context) {
-        // Get the last used profile (you may need to initialize it properly)
-        Profile profile = Profile.getLastUsedRegularProfile();
-        
-        // Create an offscreen WebContents
-        webContents = WebContentsFactory.createWebContents(profile, /* initiallyHidden= */ true);
-
-        // Set a delegate to handle events
-        webContents.setDelegate(new WebContentsDelegateAndroid() {
-            @Override
-            public void didFinishLoad(long frameId, String validatedUrl, boolean isMainFrame) {
-                if (isMainFrame) {
-                    extractText();
+ private:
+    void OnMutation(const HeapVector<Member<MutationRecord>>& records,
+                    MutationObserver* observer) {
+        for (const auto& record : records) {
+            for (auto* added_node : record->added_nodes()) {
+                if (added_node->IsElementNode()) {
+                    Element* new_element = ToElement(added_node);
+                    // Example: Log the new element's tag name
+                    LOG(INFO) << "New Element Added: " << new_element->tag_name().Ascii();
                 }
             }
-        });
-
-        // Load the URL
-        NavigationController navigationController = webContents.getNavigationController();
-        navigationController.loadUrl(new LoadUrlParams("https://example.com"));
+        }
     }
 
-    private void extractText() {
-        String script = "document.body.innerText";
-        webContents.evaluateJavaScript(script, value -> {
-            Log.d("ExtractedText", value);
-        });
-    }
-}
+    Member<Document> document_;
+    Member<MutationObserver> observer_;
+};
+
+}  // namespace blink
