@@ -1,45 +1,97 @@
-#include "third_party/blink/renderer/core/dom/document.h"
-#include "third_party/blink/renderer/core/dom/mutation_observer.h"
-#include "third_party/blink/renderer/core/dom/mutation_observer_registration.h"
-#include "third_party/blink/renderer/core/dom/mutation_record.h"
-
-namespace blink {
-
-class DynamicElementObserver {
+// Mutation observer changes
+class DocMutationObserver : public MutationObserver::Delegate {
  public:
-    explicit DynamicElementObserver(Document* document) : document_(document) {
-        SetupObserver();
-    }
+  explicit DocMutationObserver(Element& doc)
+      : doc_(doc), observer_(MutationObserver::Create(this)) {
+    MutationObserverInit* init = MutationObserverInit::Create();
+    init->setCharacterData(true);
+    init->setChildList(true);
+    init->setSubtree(true);
+    observer_->observe(doc_, init, ASSERT_NO_EXCEPTION);
+  }
 
-    void SetupObserver() {
-        MutationObserverOptions options;
-        options.child_list = true; // Observe child additions/removals
-        options.subtree = true;    // Observe changes throughout the entire subtree
+  ExecutionContext* GetExecutionContext() const override {
+    return doc_->GetExecutionContext();
+  }
 
-        observer_ = MutationObserver::Create(
-            document_, 
-            WTF::Bind(&DynamicElementObserver::OnMutation, WrapWeakPersistent(this))
-        );
+  void Deliver(const MutationRecordVector& records,
+               MutationObserver&) override {
+    LOG(INFO) << __FUNCTION__ << "TinSeln we get some mutation";
+  }
 
-        observer_->observe(document_->body(), options);
-    }
+  void Logger(){
+    LOG(INFO) << __FUNCTION__ << "TinSeln we get some mutation";
+  }
+
+  void Trace(Visitor* visitor) const override {
+    visitor->Trace(doc_);
+    visitor->Trace(observer_);
+    MutationObserver::Delegate::Trace(visitor);
+  }
 
  private:
-    void OnMutation(const HeapVector<Member<MutationRecord>>& records,
-                    MutationObserver* observer) {
-        for (const auto& record : records) {
-            for (auto* added_node : record->added_nodes()) {
-                if (added_node->IsElementNode()) {
-                    Element* new_element = ToElement(added_node);
-                    // Example: Log the new element's tag name
-                    LOG(INFO) << "New Element Added: " << new_element->tag_name().Ascii();
-                }
-            }
-        }
-    }
-
-    Member<Document> document_;
-    Member<MutationObserver> observer_;
+  Member<Element> doc_;
+  Member<MutationObserver> observer_;
 };
 
-}  // namespace blink
+// // Callback function for MutationObserver
+// void MutationCallback(const HeapVector<Member<MutationRecord>>& records,
+//                        MutationObserver&) {
+//     for (const auto& record : records) {
+//         const AtomicString& mutation_type = record->type();
+
+//         if (mutation_type == "childList") {
+//             LOG(INFO) << "[Observer] Element modified: "
+//                       << record->target()->nodeName().Utf8().data();
+//         } else if (mutation_type == "attributes") {
+//             LOG(INFO) << "[Observer] Attribute changed: "
+//                       << record->attributeName().Utf8().data();
+//         } else if (mutation_type == "characterData") {
+//             LOG(INFO) << "[Observer] Text content changed in: "
+//                       << record->target()->nodeName().Utf8().data();
+//         } else {
+//             LOG(INFO) << "[Observer] Unknown mutation type.";
+//         }
+//     }
+// }
+
+void Document::AddMutationObserversToElements() {
+	LocalFrame* frame = GetFrame();
+    if (!frame)
+        return;
+
+    // ScriptState* script_state = ToScriptState(frame->GetScriptContext());
+    // if (!script_state)
+    //     return;
+
+    // auto* observer = MutationObserver::Create(script_state, MutationCallback);
+
+    // MutationObserverInit options;
+    // options.child_list = true;
+    // options.attributes = true;
+    // options.character_data = true;
+
+    // Select elements to observe
+    // for (auto* element : getElementsByTagName("div")) {
+    //     observer->Observe(element, options);
+    //     LOG(INFO) << " TinSeln Observing <div> element.";
+    // }
+    int loop_count = 0;
+    for (auto* element : *getElementsByTagName(AtomicString("div"))) {
+    	DocMutationObserver* dmo = MakeGarbageCollected<DocMutationObserver>(*element);
+    	dmo->Logger();
+        LOG(INFO) << " TinSeln Observing <p> element.";
+        loop_count ++;
+        if(loop_count > 5) break;
+    }
+}
+
+void Document::FinishedParsing() {
+  TRACE_EVENT_WITH_FLOW0("blink", "Document::FinishedParsing",
+                         TRACE_ID_LOCAL(this),
+                         TRACE_EVENT_FLAG_FLOW_IN | TRACE_EVENT_FLAG_FLOW_OUT);
+  DCHECK(!GetScriptableDocumentParser() || !parser_->IsParsing());
+  DCHECK(!GetScriptableDocumentParser() || ready_state_ != kLoading);
+
+  AddMutationObserversToElements();
+    LOG(INFO) << "TinSeln Mutation observers added to selected elements.";
