@@ -95,3 +95,33 @@ void Document::FinishedParsing() {
 
   AddMutationObserversToElements();
     LOG(INFO) << "TinSeln Mutation observers added to selected elements.";
+
+#include "third_party/blink/renderer/core/dom/element.h"
+#include "third_party/blink/renderer/core/html/html_element.h"
+#include "third_party/blink/renderer/core/dom/child_node_list.h"
+
+void PrintElementInfo(Element* element) {
+    if (!element) return;
+
+    // Get parent element
+    Element* parent = element->parentElement();
+    if (parent) {
+        printf("Parent Element: %s\n", parent->nodeName().Utf8().c_str());
+    } else {
+        printf("No parent element found.\n");
+    }
+
+    // First level of children
+    printf("First-level children:\n");
+    for (Element* child = element->firstElementChild(); child; 
+         child = child->nextElementSibling()) {
+        printf(" - %s\n", child->nodeName().Utf8().c_str());
+
+        // Second level of children
+        printf("   Second-level children:\n");
+        for (Element* grandchild = child->firstElementChild(); grandchild;
+             grandchild = grandchild->nextElementSibling()) {
+            printf("     - %s\n", grandchild->nodeName().Utf8().c_str());
+        }
+    }
+}
