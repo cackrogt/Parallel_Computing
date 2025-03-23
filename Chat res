@@ -16,11 +16,95 @@ class DocMutationObserver : public MutationObserver::Delegate {
 
   void Deliver(const MutationRecordVector& records,
                MutationObserver&) override {
-    LOG(INFO) << __FUNCTION__ << "TinSeln we get some mutation";
+  	if (!doc_) return;
+  	LOG(INFO) << __FUNCTION__ << "TinSeln we get some ObserveMutation";
+    
+
+  	// for (const auto& record : records) {
+    //         Node* mutated_node = record->target();
+    //         Element* closest_container = mutated_node->parentElement();
+
+    //         if (closest_container) {
+    //             LOG(INFO) << "TinSeln ObserveMutation Mutation detected in closest container: "
+    //                       << closest_container->nodeName();
+    //         } else {
+    //             LOG(INFO) << "TinSeln ObserveMutation Mutation detected but no container found.";
+    //         }
+    //     }
+
+    for (const auto& record : records) {
+            Node* mutated_node = record->target();
+            if (!mutated_node)
+                continue;
+
+            // Get the mutated element (only if it's an Element)
+            Element* mutated_element = DynamicTo<Element>(mutated_node);
+            if (!mutated_element)
+                continue;
+
+            // Find the closest previous and next elements
+            Element* previous_element = GetPreviousElement(mutated_element);
+            Element* next_element = GetNextElement(mutated_element);
+
+            const ComputedStyle* style = mutated_element->GetComputedStyle();
+            int z_index = style ? style->ZIndex() : 0;
+
+            // Get ID and class names properly
+            String element_id = mutated_element->IdForStyleResolution().GetString();
+            const SpaceSplitString& class_list = mutated_element->ClassNames();
+            String class_names;
+            for (const auto& class_name : class_list) {
+                if (!class_names.empty()) {
+                    class_names + " ";  // Add space separator
+                }
+                class_names + class_name;
+            }
+
+            // Print meta info
+            LOG(INFO) << "TinSeln ObserveMutation Mutation in element: " << mutated_element->nodeName();
+            LOG(INFO) << " TinSeln ObserveMutation - ID: " << (element_id.empty() ? "None" : element_id.Utf8().data());
+            LOG(INFO) << " TinSeln ObserveMutation - Class: " << (class_names.empty() ? "None" : class_names.Utf8().data());;
+            LOG(INFO) << " TinSeln ObserveMutation - Z-Index: " << z_index;
+
+            LOG(INFO) << "TinSeln ObserveMutation Mutation detected in element: " << mutated_element->nodeName();
+            if (previous_element) {
+                LOG(INFO) << "TinSeln ObserveMutation Previous element: " << previous_element->nodeName();
+            } else {
+                LOG(INFO) << "TinSeln ObserveMutation No previous element.";
+            }
+            if (next_element) {
+                LOG(INFO) << "TinSeln ObserveMutation Next element: " << next_element->nodeName();
+            } else {
+                LOG(INFO) << "TinSeln ObserveMutation No next element.";
+            }
+        }
+    
+
+    // Get parent element
+    // Element* parent = doc_->parentElement();
+    // if (parent) {
+    //     LOG(INFO) << "TinSeln Parent Element: " << parent->nodeName().Utf8().c_str();
+    // } else {
+    //     LOG(INFO) << __FUNCTION__ << "TinSeln ObserveMutation No parent element found.\n";
+    // }
+
+    // // First level of children
+    // LOG(INFO) << __FUNCTION__ << "TinSeln ObserveMutation First-level children:\n";
+    // for (Element* child = doc_->firstElementChild(); child; 
+    //      child = child->nextElementSibling()) {
+    //     LOG(INFO) << __FUNCTION__ << " - " << child->nodeName().Utf8().c_str();
+
+    //     // Second level of children
+    //     printf("  TinSeln ObserveMutation Second-level children:\n");
+    //     for (Element* grandchild = child->firstElementChild(); grandchild;
+    //          grandchild = grandchild->nextElementSibling()) {
+    //         LOG(INFO) << __FUNCTION__ << " - "<< grandchild->nodeName().Utf8().c_str();
+    //     }
+    // }
   }
 
   void Logger(){
-    LOG(INFO) << __FUNCTION__ << "TinSeln we get some mutation";
+    LOG(INFO) << __FUNCTION__ << "TinSeln Logger we get some mutation";
   }
 
   void Trace(Visitor* visitor) const override {
@@ -28,62 +112,42 @@ class DocMutationObserver : public MutationObserver::Delegate {
     visitor->Trace(observer_);
     MutationObserver::Delegate::Trace(visitor);
   }
+    Element* GetPreviousElement(Node* node) {
+        Node* previous = node->previousSibling();
+        while (previous && !DynamicTo<Element>(previous)) {
+            previous = previous->previousSibling();
+        }
+        return DynamicTo<Element>(previous);
+    }
+
+    // Get closest next sibling element (skip text nodes, comments, etc.)
+    Element* GetNextElement(Node* node) {
+        Node* next = node->nextSibling();
+        while (next && !DynamicTo<Element>(next)) {
+            next = next->nextSibling();
+        }
+        return DynamicTo<Element>(next);
+    }
 
  private:
   Member<Element> doc_;
   Member<MutationObserver> observer_;
 };
 
-// // Callback function for MutationObserver
-// void MutationCallback(const HeapVector<Member<MutationRecord>>& records,
-//                        MutationObserver&) {
-//     for (const auto& record : records) {
-//         const AtomicString& mutation_type = record->type();
-
-//         if (mutation_type == "childList") {
-//             LOG(INFO) << "[Observer] Element modified: "
-//                       << record->target()->nodeName().Utf8().data();
-//         } else if (mutation_type == "attributes") {
-//             LOG(INFO) << "[Observer] Attribute changed: "
-//                       << record->attributeName().Utf8().data();
-//         } else if (mutation_type == "characterData") {
-//             LOG(INFO) << "[Observer] Text content changed in: "
-//                       << record->target()->nodeName().Utf8().data();
-//         } else {
-//             LOG(INFO) << "[Observer] Unknown mutation type.";
-//         }
-//     }
-// }
 
 void Document::AddMutationObserversToElements() {
 	LocalFrame* frame = GetFrame();
     if (!frame)
         return;
 
-    // ScriptState* script_state = ToScriptState(frame->GetScriptContext());
-    // if (!script_state)
-    //     return;
-
-    // auto* observer = MutationObserver::Create(script_state, MutationCallback);
-
-    // MutationObserverInit options;
-    // options.child_list = true;
-    // options.attributes = true;
-    // options.character_data = true;
-
-    // Select elements to observe
-    // for (auto* element : getElementsByTagName("div")) {
-    //     observer->Observe(element, options);
-    //     LOG(INFO) << " TinSeln Observing <div> element.";
+    DocMutationObserver* dmo_doc_ele = MakeGarbageCollected<DocMutationObserver>(*documentElement());
+    	dmo_doc_ele->Logger();
+    	LOG(INFO) << " TinSeln Observing <DocumentElement> element.";
+    // for (auto* element : *getElementsByTagName(AtomicString("body"))) {
+    // 	DocMutationObserver* dmo = MakeGarbageCollected<DocMutationObserver>(*element);
+    // 	dmo->Logger();
+    //     LOG(INFO) << " TinSeln Observing <body> element.";
     // }
-    int loop_count = 0;
-    for (auto* element : *getElementsByTagName(AtomicString("div"))) {
-    	DocMutationObserver* dmo = MakeGarbageCollected<DocMutationObserver>(*element);
-    	dmo->Logger();
-        LOG(INFO) << " TinSeln Observing <p> element.";
-        loop_count ++;
-        if(loop_count > 5) break;
-    }
 }
 
 void Document::FinishedParsing() {
@@ -95,33 +159,3 @@ void Document::FinishedParsing() {
 
   AddMutationObserversToElements();
     LOG(INFO) << "TinSeln Mutation observers added to selected elements.";
-
-#include "third_party/blink/renderer/core/dom/element.h"
-#include "third_party/blink/renderer/core/html/html_element.h"
-#include "third_party/blink/renderer/core/dom/child_node_list.h"
-
-void PrintElementInfo(Element* element) {
-    if (!element) return;
-
-    // Get parent element
-    Element* parent = element->parentElement();
-    if (parent) {
-        printf("Parent Element: %s\n", parent->nodeName().Utf8().c_str());
-    } else {
-        printf("No parent element found.\n");
-    }
-
-    // First level of children
-    printf("First-level children:\n");
-    for (Element* child = element->firstElementChild(); child; 
-         child = child->nextElementSibling()) {
-        printf(" - %s\n", child->nodeName().Utf8().c_str());
-
-        // Second level of children
-        printf("   Second-level children:\n");
-        for (Element* grandchild = child->firstElementChild(); grandchild;
-             grandchild = grandchild->nextElementSibling()) {
-            printf("     - %s\n", grandchild->nodeName().Utf8().c_str());
-        }
-    }
-}
