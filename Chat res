@@ -159,3 +159,92 @@ void Document::FinishedParsing() {
 
   AddMutationObserversToElements();
     LOG(INFO) << "TinSeln Mutation observers added to selected elements.";
+
+
+#include "third_party/blink/renderer/core/dom/mutation_observer.h"
+#include "third_party/blink/renderer/core/dom/mutation_observer_delegate.h"
+#include "third_party/blink/renderer/core/dom/mutation_observer_options.h"
+#include "third_party/blink/renderer/core/css/computed_style.h"
+#include "third_party/blink/renderer/platform/wtf/text/string_builder.h" // Include StringBuilder
+
+class CustomMutationObserverDelegate : public MutationObserverDelegate {
+ public:
+    explicit CustomMutationObserverDelegate(Document* document)
+        : document_(document) {}
+
+    void Deliver(
+        const HeapVector<Member<MutationRecord>>& records,
+        MutationObserver& observer) override {
+        
+        for (const auto& record : records) {
+            Node* mutated_node = record->target();
+            if (!mutated_node)
+                continue;
+
+            // Get the mutated element
+            Element* mutated_element = DynamicTo<Element>(mutated_node);
+            if (!mutated_element)
+                continue;
+
+            // Find closest previous and next elements
+            Element* previous_element = GetPreviousElement(mutated_element);
+            Element* next_element = GetNextElement(mutated_element);
+
+            // Get computed styles
+            const ComputedStyle* style = mutated_element->GetComputedStyle();
+            int z_index = style ? style->ZIndex() : 0;
+
+            // Get ID properly (check if it exists)
+            String element_id = mutated_element->IdForStyleResolution().GetString();
+            bool has_id = !element_id.IsNull() && element_id.length();
+
+            // Get class names properly using StringBuilder
+            StringBuilder class_names;
+            const SpaceSplitString& class_list = mutated_element->ClassNames();
+            for (const auto& class_name : class_list) {
+                if (!class_names.IsEmpty()) {
+                    class_names.Append(" ");  // Add space separator
+                }
+                class_names.Append(class_name);
+            }
+
+            // Print meta info
+            LOG(INFO) << "Mutation in element: " << mutated_element->nodeName();
+            LOG(INFO) << "  - ID: " << (has_id ? element_id.Utf8().data() : "None");
+            LOG(INFO) << "  - Class: " << (class_names.IsEmpty() ? "None" : class_names.ToString().Utf8().data());
+            LOG(INFO) << "  - Z-Index: " << z_index;
+
+            if (previous_element) {
+                LOG(INFO) << "Previous element: " << previous_element->nodeName();
+            } else {
+                LOG(INFO) << "No previous element.";
+            }
+            if (next_element) {
+                LOG(INFO) << "Next element: " << next_element->nodeName();
+            } else {
+                LOG(INFO) << "No next element.";
+            }
+        }
+    }
+
+ private:
+    Member<Document> document_;
+
+    // Get closest previous sibling element (skip text nodes, comments, etc.)
+    Element* GetPreviousElement(Node* node) {
+        Node* previous = node->previousSibling();
+        while (previous && !DynamicTo<Element>(previous)) {
+            previous = previous->previousSibling();
+        }
+        return DynamicTo<Element>(previous);
+    }
+
+    // Get closest next sibling element (skip text nodes, comments, etc.)
+    Element* GetNextElement(Node* node) {
+        Node* next = node->nextSibling();
+        while (next && !DynamicTo<Element>(next)) {
+            next = next->nextSibling();
+        }
+        return DynamicTo<Element>(next);
+    }
+};
