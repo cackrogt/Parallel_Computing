@@ -1,5 +1,3 @@
-(base) ankit@ankit:~/Desktop/Chromium/chromium/src$ git diff
-diff --git a/third_party/blink/renderer/core/dom/container_node.cc b/third_party/blink/renderer/core/dom/container_node.cc
 index 153a9d90eb..a1816b0f0a 100644
 --- a/third_party/blink/renderer/core/dom/container_node.cc
 +++ b/third_party/blink/renderer/core/dom/container_node.cc
@@ -14,7 +12,7 @@ index 153a9d90eb..a1816b0f0a 100644
    if (!EnsurePreInsertionValidity(/*new_child*/ nullptr, &new_children,
                                    ref_child, /*old_child*/ nullptr,
 diff --git a/third_party/blink/renderer/core/dom/document.cc b/third_party/blink/renderer/core/dom/document.cc
-index b8e7a889e8..f460429986 100644
+index b8e7a889e8..c506da70be 100644
 --- a/third_party/blink/renderer/core/dom/document.cc
 +++ b/third_party/blink/renderer/core/dom/document.cc
 @@ -63,6 +63,7 @@
@@ -65,7 +63,7 @@ index b8e7a889e8..f460429986 100644
 +  void Deliver(const MutationRecordVector& records,
 +               MutationObserver&) override {
 +       if (!doc_) return;
-+       if(document_->LoadProgress() != 1.0) return;
++       if(doc_->GetDocument().LoadProgress() != 1.0) return;
 +       LOG(INFO) << __FUNCTION__ << "TinSeln we get some ObserveMutation";
 +    
 +
@@ -241,7 +239,7 @@ index e9fa78d2af..5b4830ebfe 100644
    void SetEncodingData(const DocumentEncodingData& new_data);
    const WTF::TextEncoding& Encoding() const {
 diff --git a/third_party/blink/renderer/core/loader/progress_tracker.cc b/third_party/blink/renderer/core/loader/progress_tracker.cc
-index 280c3ef6b9..f79a049c70 100644
+index 280c3ef6b9..2f01d16065 100644
 --- a/third_party/blink/renderer/core/loader/progress_tracker.cc
 +++ b/third_party/blink/renderer/core/loader/progress_tracker.cc
 @@ -28,6 +28,7 @@
@@ -257,7 +255,7 @@ index 280c3ef6b9..f79a049c70 100644
      last_notified_progress_value_ = progress_value_;
      last_notified_progress_time_ = now;
 +    if (frame_->GetDocument()) {
-+      frame_->GetDocument()->OnLoadProgressChanged(progress);
++      frame_->GetDocument()->OnLoadProgressChanged(progress_value_);
 +    }
    }
  }
