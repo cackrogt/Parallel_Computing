@@ -1,250 +1,263 @@
-// Mutation observer changes
-class DocMutationObserver : public MutationObserver::Delegate {
- public:
-  explicit DocMutationObserver(Element& doc)
-      : doc_(doc), observer_(MutationObserver::Create(this)) {
-    MutationObserverInit* init = MutationObserverInit::Create();
-    init->setCharacterData(true);
-    init->setChildList(true);
-    init->setSubtree(true);
-    observer_->observe(doc_, init, ASSERT_NO_EXCEPTION);
-  }
-
-  ExecutionContext* GetExecutionContext() const override {
-    return doc_->GetExecutionContext();
-  }
-
-  void Deliver(const MutationRecordVector& records,
-               MutationObserver&) override {
-  	if (!doc_) return;
-  	LOG(INFO) << __FUNCTION__ << "TinSeln we get some ObserveMutation";
-    
-
-  	// for (const auto& record : records) {
-    //         Node* mutated_node = record->target();
-    //         Element* closest_container = mutated_node->parentElement();
-
-    //         if (closest_container) {
-    //             LOG(INFO) << "TinSeln ObserveMutation Mutation detected in closest container: "
-    //                       << closest_container->nodeName();
-    //         } else {
-    //             LOG(INFO) << "TinSeln ObserveMutation Mutation detected but no container found.";
-    //         }
-    //     }
-
-    for (const auto& record : records) {
-            Node* mutated_node = record->target();
-            if (!mutated_node)
-                continue;
-
-            // Get the mutated element (only if it's an Element)
-            Element* mutated_element = DynamicTo<Element>(mutated_node);
-            if (!mutated_element)
-                continue;
-
-            // Find the closest previous and next elements
-            Element* previous_element = GetPreviousElement(mutated_element);
-            Element* next_element = GetNextElement(mutated_element);
-
-            const ComputedStyle* style = mutated_element->GetComputedStyle();
-            int z_index = style ? style->ZIndex() : 0;
-
-            // Get ID and class names properly
-            String element_id = mutated_element->IdForStyleResolution().GetString();
-            const SpaceSplitString& class_list = mutated_element->ClassNames();
-            String class_names;
-            for (const auto& class_name : class_list) {
-                if (!class_names.empty()) {
-                    class_names + " ";  // Add space separator
-                }
-                class_names + class_name;
-            }
-
-            // Print meta info
-            LOG(INFO) << "TinSeln ObserveMutation Mutation in element: " << mutated_element->nodeName();
-            LOG(INFO) << " TinSeln ObserveMutation - ID: " << (element_id.empty() ? "None" : element_id.Utf8().data());
-            LOG(INFO) << " TinSeln ObserveMutation - Class: " << (class_names.empty() ? "None" : class_names.Utf8().data());;
-            LOG(INFO) << " TinSeln ObserveMutation - Z-Index: " << z_index;
-
-            LOG(INFO) << "TinSeln ObserveMutation Mutation detected in element: " << mutated_element->nodeName();
-            if (previous_element) {
-                LOG(INFO) << "TinSeln ObserveMutation Previous element: " << previous_element->nodeName();
-            } else {
-                LOG(INFO) << "TinSeln ObserveMutation No previous element.";
-            }
-            if (next_element) {
-                LOG(INFO) << "TinSeln ObserveMutation Next element: " << next_element->nodeName();
-            } else {
-                LOG(INFO) << "TinSeln ObserveMutation No next element.";
-            }
-        }
-    
-
-    // Get parent element
-    // Element* parent = doc_->parentElement();
-    // if (parent) {
-    //     LOG(INFO) << "TinSeln Parent Element: " << parent->nodeName().Utf8().c_str();
-    // } else {
-    //     LOG(INFO) << __FUNCTION__ << "TinSeln ObserveMutation No parent element found.\n";
-    // }
-
-    // // First level of children
-    // LOG(INFO) << __FUNCTION__ << "TinSeln ObserveMutation First-level children:\n";
-    // for (Element* child = doc_->firstElementChild(); child; 
-    //      child = child->nextElementSibling()) {
-    //     LOG(INFO) << __FUNCTION__ << " - " << child->nodeName().Utf8().c_str();
-
-    //     // Second level of children
-    //     printf("  TinSeln ObserveMutation Second-level children:\n");
-    //     for (Element* grandchild = child->firstElementChild(); grandchild;
-    //          grandchild = grandchild->nextElementSibling()) {
-    //         LOG(INFO) << __FUNCTION__ << " - "<< grandchild->nodeName().Utf8().c_str();
-    //     }
-    // }
-  }
-
-  void Logger(){
-    LOG(INFO) << __FUNCTION__ << "TinSeln Logger we get some mutation";
-  }
-
-  void Trace(Visitor* visitor) const override {
-    visitor->Trace(doc_);
-    visitor->Trace(observer_);
-    MutationObserver::Delegate::Trace(visitor);
-  }
-    Element* GetPreviousElement(Node* node) {
-        Node* previous = node->previousSibling();
-        while (previous && !DynamicTo<Element>(previous)) {
-            previous = previous->previousSibling();
-        }
-        return DynamicTo<Element>(previous);
-    }
-
-    // Get closest next sibling element (skip text nodes, comments, etc.)
-    Element* GetNextElement(Node* node) {
-        Node* next = node->nextSibling();
-        while (next && !DynamicTo<Element>(next)) {
-            next = next->nextSibling();
-        }
-        return DynamicTo<Element>(next);
-    }
-
- private:
-  Member<Element> doc_;
-  Member<MutationObserver> observer_;
-};
-
-
-void Document::AddMutationObserversToElements() {
-	LocalFrame* frame = GetFrame();
-    if (!frame)
-        return;
-
-    DocMutationObserver* dmo_doc_ele = MakeGarbageCollected<DocMutationObserver>(*documentElement());
-    	dmo_doc_ele->Logger();
-    	LOG(INFO) << " TinSeln Observing <DocumentElement> element.";
-    // for (auto* element : *getElementsByTagName(AtomicString("body"))) {
-    // 	DocMutationObserver* dmo = MakeGarbageCollected<DocMutationObserver>(*element);
-    // 	dmo->Logger();
-    //     LOG(INFO) << " TinSeln Observing <body> element.";
-    // }
-}
-
-void Document::FinishedParsing() {
-  TRACE_EVENT_WITH_FLOW0("blink", "Document::FinishedParsing",
-                         TRACE_ID_LOCAL(this),
-                         TRACE_EVENT_FLAG_FLOW_IN | TRACE_EVENT_FLAG_FLOW_OUT);
-  DCHECK(!GetScriptableDocumentParser() || !parser_->IsParsing());
-  DCHECK(!GetScriptableDocumentParser() || ready_state_ != kLoading);
-
-  AddMutationObserversToElements();
-    LOG(INFO) << "TinSeln Mutation observers added to selected elements.";
-
-
-#include "third_party/blink/renderer/core/dom/mutation_observer.h"
-#include "third_party/blink/renderer/core/dom/mutation_observer_delegate.h"
-#include "third_party/blink/renderer/core/dom/mutation_observer_options.h"
-#include "third_party/blink/renderer/core/css/computed_style.h"
-#include "third_party/blink/renderer/platform/wtf/text/string_builder.h" // Include StringBuilder
-
-class CustomMutationObserverDelegate : public MutationObserverDelegate {
- public:
-    explicit CustomMutationObserverDelegate(Document* document)
-        : document_(document) {}
-
-    void Deliver(
-        const HeapVector<Member<MutationRecord>>& records,
-        MutationObserver& observer) override {
-        
-        for (const auto& record : records) {
-            Node* mutated_node = record->target();
-            if (!mutated_node)
-                continue;
-
-            // Get the mutated element
-            Element* mutated_element = DynamicTo<Element>(mutated_node);
-            if (!mutated_element)
-                continue;
-
-            // Find closest previous and next elements
-            Element* previous_element = GetPreviousElement(mutated_element);
-            Element* next_element = GetNextElement(mutated_element);
-
-            // Get computed styles
-            const ComputedStyle* style = mutated_element->GetComputedStyle();
-            int z_index = style ? style->ZIndex() : 0;
-
-            // Get ID properly (check if it exists)
-            String element_id = mutated_element->IdForStyleResolution().GetString();
-            bool has_id = !element_id.IsNull() && element_id.length();
-
-            // Get class names properly using StringBuilder
-            StringBuilder class_names;
-            const SpaceSplitString& class_list = mutated_element->ClassNames();
-            for (const auto& class_name : class_list) {
-                if (!class_names.IsEmpty()) {
-                    class_names.Append(" ");  // Add space separator
-                }
-                class_names.Append(class_name);
-            }
-
-            // Print meta info
-            LOG(INFO) << "Mutation in element: " << mutated_element->nodeName();
-            LOG(INFO) << "  - ID: " << (has_id ? element_id.Utf8().data() : "None");
-            LOG(INFO) << "  - Class: " << (class_names.IsEmpty() ? "None" : class_names.ToString().Utf8().data());
-            LOG(INFO) << "  - Z-Index: " << z_index;
-
-            if (previous_element) {
-                LOG(INFO) << "Previous element: " << previous_element->nodeName();
-            } else {
-                LOG(INFO) << "No previous element.";
-            }
-            if (next_element) {
-                LOG(INFO) << "Next element: " << next_element->nodeName();
-            } else {
-                LOG(INFO) << "No next element.";
-            }
-        }
-    }
-
- private:
-    Member<Document> document_;
-
-    // Get closest previous sibling element (skip text nodes, comments, etc.)
-    Element* GetPreviousElement(Node* node) {
-        Node* previous = node->previousSibling();
-        while (previous && !DynamicTo<Element>(previous)) {
-            previous = previous->previousSibling();
-        }
-        return DynamicTo<Element>(previous);
-    }
-
-    // Get closest next sibling element (skip text nodes, comments, etc.)
-    Element* GetNextElement(Node* node) {
-        Node* next = node->nextSibling();
-        while (next && !DynamicTo<Element>(next)) {
-            next = next->nextSibling();
-        }
-        return DynamicTo<Element>(next);
-    }
-};
+(base) ankit@ankit:~/Desktop/Chromium/chromium/src$ git diff
+diff --git a/third_party/blink/renderer/core/dom/container_node.cc b/third_party/blink/renderer/core/dom/container_node.cc
+index 153a9d90eb..a1816b0f0a 100644
+--- a/third_party/blink/renderer/core/dom/container_node.cc
++++ b/third_party/blink/renderer/core/dom/container_node.cc
+@@ -433,6 +433,9 @@ void ContainerNode::InsertBefore(const VectorOf<Node>& new_children,
+     AppendChildren(new_children, exception_state);
+     return;
+   }
++  if(ref_child) {
++    LOG(INFO)<<__FUNCTION__<<"TinSeln we do get inserBefore " + ref_child->nodeName().Utf8();
++  }
+ 
+   if (!EnsurePreInsertionValidity(/*new_child*/ nullptr, &new_children,
+                                   ref_child, /*old_child*/ nullptr,
+diff --git a/third_party/blink/renderer/core/dom/document.cc b/third_party/blink/renderer/core/dom/document.cc
+index b8e7a889e8..f460429986 100644
+--- a/third_party/blink/renderer/core/dom/document.cc
++++ b/third_party/blink/renderer/core/dom/document.cc
+@@ -63,6 +63,7 @@
+ #include "services/network/public/mojom/permissions_policy/permissions_policy_feature.mojom-blink-forward.h"
+ #include "services/network/public/mojom/trust_tokens.mojom-blink.h"
+ #include "services/network/public/mojom/web_sandbox_flags.mojom-blink.h"
++#include "third_party/blink/renderer/bindings/core/v8/v8_mutation_observer_init.h"
+ #include "third_party/blink/public/common/features.h"
+ #include "third_party/blink/public/common/permissions_policy/document_policy_features.h"
+ #include "third_party/blink/public/common/privacy_budget/identifiability_sample_collector.h"
+@@ -132,6 +133,9 @@
+ #include "third_party/blink/renderer/core/display_lock/display_lock_context.h"
+ #include "third_party/blink/renderer/core/display_lock/display_lock_document_state.h"
+ #include "third_party/blink/renderer/core/display_lock/display_lock_utilities.h"
++#include "third_party/blink/renderer/core/dom/mutation_observer.h"
++#include "third_party/blink/renderer/core/dom/mutation_observer_options.h"
++#include "third_party/blink/renderer/core/dom/mutation_record.h"
+ #include "third_party/blink/renderer/core/dom/attr.h"
+ #include "third_party/blink/renderer/core/dom/beforeunload_event_listener.h"
+ #include "third_party/blink/renderer/core/dom/cdata_section.h"
+@@ -7416,12 +7420,179 @@ void Document::OnPrepareToStopParsing() {
+       MilestoneForDelayedAsyncScript::kFinishedParsing);
+ }
+ 
++void Document::OnLoadProgressChanged(double progress) {
++  LOG(INFO) << "TinSeln ProgressTracking. Document load progress updated: " 
++       << progress;
++  load_progress_ = progress;
++  // TODO: Add custom behavior for handling progress updates in the document.
++}
++
++// Mutation observer changes
++class DocMutationObserver : public MutationObserver::Delegate {
++ public:
++  explicit DocMutationObserver(Element& doc)
++      : doc_(doc), observer_(MutationObserver::Create(this)) {
++    MutationObserverInit* init = MutationObserverInit::Create();
++    init->setCharacterData(true);
++    init->setChildList(true);
++    init->setSubtree(true);
++    observer_->observe(doc_, init, ASSERT_NO_EXCEPTION);
++  }
++
++  ExecutionContext* GetExecutionContext() const override {
++    return doc_->GetExecutionContext();
++  }
++
++  void Deliver(const MutationRecordVector& records,
++               MutationObserver&) override {
++       if (!doc_) return;
++       if(document_->LoadProgress() != 1.0) return;
++       LOG(INFO) << __FUNCTION__ << "TinSeln we get some ObserveMutation";
++    
++
++       // for (const auto& record : records) {
++    //         Node* mutated_node = record->target();
++    //         Element* closest_container = mutated_node->parentElement();
++
++    //         if (closest_container) {
++    //             LOG(INFO) << "TinSeln ObserveMutation Mutation detected in closest container: "
++    //                       << closest_container->nodeName();
++    //         } else {
++    //             LOG(INFO) << "TinSeln ObserveMutation Mutation detected but no container found.";
++    //         }
++    //     }
++
++    for (const auto& record : records) {
++            Node* mutated_node = record->target();
++            if (!mutated_node)
++                continue;
++
++            // Get the mutated element (only if it's an Element)
++            Element* mutated_element = DynamicTo<Element>(mutated_node);
++            if (!mutated_element)
++                continue;
++
++            // Find the closest previous and next elements
++            Element* previous_element = GetPreviousElement(mutated_element);
++            Element* next_element = GetNextElement(mutated_element);
++
++            const ComputedStyle* style = mutated_element->GetComputedStyle();
++            int z_index = style ? style->ZIndex() : -1;
++
++            // Get ID and class names properly
++            String element_id = mutated_element->HasID() ?
++               mutated_element->IdForStyleResolution().GetString(): "No_ID";
++            String class_names;
++            if(mutated_element->HasClass()) {
++                   const SpaceSplitString& class_list = mutated_element->ClassNames();
++                   for (const auto& class_name : class_list) {
++                       if (!class_names.empty()) {
++                           class_names + " ";  // Add space separator
++                       }
++                       class_names + class_name;
++                   }
++               }
++
++            // Print meta info
++            LOG(INFO) << "TinSeln ObserveMutation Mutation in element: " << mutated_element->nodeName();
++            LOG(INFO) << " TinSeln ObserveMutation - ID: " << (element_id.empty() ? "None" : element_id.Utf8().data());
++            LOG(INFO) << " TinSeln ObserveMutation - Class: " << (class_names.empty() ? "None" : class_names.Utf8().data());;
++            LOG(INFO) << " TinSeln ObserveMutation - Z-Index: " << z_index;
++
++            LOG(INFO) << "TinSeln ObserveMutation Mutation detected in element: " << mutated_element->nodeName();
++            if (previous_element) {
++                LOG(INFO) << "TinSeln ObserveMutation Previous element: " << previous_element->nodeName();
++            } else {
++                LOG(INFO) << "TinSeln ObserveMutation No previous element.";
++            }
++            if (next_element) {
++                LOG(INFO) << "TinSeln ObserveMutation Next element: " << next_element->nodeName();
++            } else {
++                LOG(INFO) << "TinSeln ObserveMutation No next element.";
++            }
++        }
++    
++
++    // Get parent element
++    // Element* parent = doc_->parentElement();
++    // if (parent) {
++    //     LOG(INFO) << "TinSeln Parent Element: " << parent->nodeName().Utf8().c_str();
++    // } else {
++    //     LOG(INFO) << __FUNCTION__ << "TinSeln ObserveMutation No parent element found.\n";
++    // }
++
++    // // First level of children
++    // LOG(INFO) << __FUNCTION__ << "TinSeln ObserveMutation First-level children:\n";
++    // for (Element* child = doc_->firstElementChild(); child; 
++    //      child = child->nextElementSibling()) {
++    //     LOG(INFO) << __FUNCTION__ << " - " << child->nodeName().Utf8().c_str();
++
++    //     // Second level of children
++    //     printf("  TinSeln ObserveMutation Second-level children:\n");
++    //     for (Element* grandchild = child->firstElementChild(); grandchild;
++    //          grandchild = grandchild->nextElementSibling()) {
++    //         LOG(INFO) << __FUNCTION__ << " - "<< grandchild->nodeName().Utf8().c_str();
++    //     }
++    // }
++  }
++
++  void Logger(){
++    LOG(INFO) << __FUNCTION__ << "TinSeln Logger we get some mutation";
++  }
++
++  void Trace(Visitor* visitor) const override {
++    visitor->Trace(doc_);
++    visitor->Trace(observer_);
++    MutationObserver::Delegate::Trace(visitor);
++  }
++    Element* GetPreviousElement(Node* node) {
++        Node* previous = node->previousSibling();
++        while (previous && !DynamicTo<Element>(previous)) {
++            previous = previous->previousSibling();
++        }
++        return DynamicTo<Element>(previous);
++    }
++
++    // Get closest next sibling element (skip text nodes, comments, etc.)
++    Element* GetNextElement(Node* node) {
++        Node* next = node->nextSibling();
++        while (next && !DynamicTo<Element>(next)) {
++            next = next->nextSibling();
++        }
++        return DynamicTo<Element>(next);
++    }
++
++ private:
++  Member<Element> doc_;
++  Member<MutationObserver> observer_;
++};
++
++
++void Document::AddMutationObserversToElements() {
++       LocalFrame* frame = GetFrame();
++    if (!frame)
++        return;
++
++    DocMutationObserver* dmo_doc_ele = MakeGarbageCollected<DocMutationObserver>(*documentElement());
++       dmo_doc_ele->Logger();
++       LOG(INFO) << " TinSeln Observing <DocumentElement> element.";
++    // for (auto* element : *getElementsByTagName(AtomicString("body"))) {
++    //         DocMutationObserver* dmo = MakeGarbageCollected<DocMutationObserver>(*element);
++    //         dmo->Logger();
++    //     LOG(INFO) << " TinSeln Observing <body> element.";
++    // }
++}
++
+ void Document::FinishedParsing() {
+   TRACE_EVENT_WITH_FLOW0("blink", "Document::FinishedParsing",
+                          TRACE_ID_LOCAL(this),
+                          TRACE_EVENT_FLAG_FLOW_IN | TRACE_EVENT_FLAG_FLOW_OUT);
+   DCHECK(!GetScriptableDocumentParser() || !parser_->IsParsing());
+   DCHECK(!GetScriptableDocumentParser() || ready_state_ != kLoading);
++
++  AddMutationObserversToElements();
++    LOG(INFO) << "TinSeln Mutation observers added to selected elements.";
++
+   SetParsingState(kInDOMContentLoaded);
+   DocumentParserTiming::From(*this).MarkParserStop();
+ 
+diff --git a/third_party/blink/renderer/core/dom/document.h b/third_party/blink/renderer/core/dom/document.h
+index e9fa78d2af..5b4830ebfe 100644
+--- a/third_party/blink/renderer/core/dom/document.h
++++ b/third_party/blink/renderer/core/dom/document.h
+@@ -400,6 +400,12 @@ class CORE_EXPORT Document : public ContainerNode,
+   void SetMediaFeatureEvaluated(int feature);
+   bool WasMediaFeatureEvaluated(int feature);
+ 
++  // For Progress Tracking.
++  void OnLoadProgressChanged(double progress);
++  double LoadProgress() const { return load_progress_; }
++  double load_progress_ = 0.0;
++  // End of Progress Tracking.
++
+   using TreeScope::getElementById;
+ 
+   bool IsInitialEmptyDocument() const { return is_initial_empty_document_; }
+@@ -1441,6 +1447,7 @@ class CORE_EXPORT Document : public ContainerNode,
+   void OnLargestContentfulPaintUpdated();
+   void OnPrepareToStopParsing();
+   void FinishedParsing();
++  void AddMutationObserversToElements();
+ 
+   void SetEncodingData(const DocumentEncodingData& new_data);
+   const WTF::TextEncoding& Encoding() const {
+diff --git a/third_party/blink/renderer/core/loader/progress_tracker.cc b/third_party/blink/renderer/core/loader/progress_tracker.cc
+index 280c3ef6b9..f79a049c70 100644
+--- a/third_party/blink/renderer/core/loader/progress_tracker.cc
++++ b/third_party/blink/renderer/core/loader/progress_tracker.cc
+@@ -28,6 +28,7 @@
+ #include "third_party/blink/public/common/loader/loader_constants.h"
+ #include "third_party/blink/public/mojom/frame/frame.mojom-blink.h"
+ #include "third_party/blink/public/web/web_settings.h"
++#include "third_party/blink/renderer/core/dom/document.h"
+ #include "third_party/blink/renderer/core/frame/local_frame.h"
+ #include "third_party/blink/renderer/core/frame/local_frame_client.h"
+ #include "third_party/blink/renderer/core/frame/local_frame_view.h"
+@@ -217,6 +218,9 @@ void ProgressTracker::MaybeSendProgress() {
+     frame_->GetLocalFrameHostRemote().DidChangeLoadProgress(progress_value_);
+     last_notified_progress_value_ = progress_value_;
+     last_notified_progress_time_ = now;
++    if (frame_->GetDocument()) {
++      frame_->GetDocument()->OnLoadProgressChanged(progress);
++    }
+   }
+ }
