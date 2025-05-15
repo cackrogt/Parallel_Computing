@@ -396,3 +396,38 @@ index 280c3ef6b9..bd4e40503f 100644
 +    }
    }
  }
+
+import os
+import random
+import numpy as np
+
+def load_custom_text_classification_dataset(data_path, seed=123):
+    categories = ['install', 'notification', 'neither']
+    label_map = {
+        'install': 0,
+        'notification': 1,
+        'neither': 2
+    }
+
+    def load_data(split):
+        texts = []
+        labels = []
+        for category in categories:
+            dir_path = os.path.join(data_path, split, category)
+            for fname in sorted(os.listdir(dir_path)):
+                if fname.endswith('.txt'):
+                    with open(os.path.join(dir_path, fname), encoding='utf-8') as f:
+                        texts.append(f.read())
+                    labels.append(label_map[category])
+        # Shuffle text-label pairs together
+        combined = list(zip(texts, labels))
+        random.seed(seed)
+        random.shuffle(combined)
+        texts, labels = zip(*combined)
+        return list(texts), np.array(labels)
+
+    train_texts, train_labels = load_data('train')
+    test_texts, test_labels = load_data('test')
+
+    return ((train_texts, train_labels),
+            (test_texts, test_labels))
