@@ -431,3 +431,26 @@ def load_custom_text_classification_dataset(data_path, seed=123):
 
     return ((train_texts, train_labels),
             (test_texts, test_labels))
+
+
+import os
+import pandas as pd
+
+# Load your CSV
+df = pd.read_csv("your_dataset.csv")
+
+# Target folder
+output_dir = "your_data_path/train"  # or test
+
+# Create folders and write files
+for label in df['label'].unique():
+    label_dir = os.path.join(output_dir, label.lower().replace(" ", ""))
+    os.makedirs(label_dir, exist_ok=True)
+
+# Save each text to a separate file
+for i, row in df.iterrows():
+    label = row['label'].lower().replace(" ", "")
+    text = row['text']
+    file_path = os.path.join(output_dir, label, f"sample_{i}.txt")
+    with open(file_path, 'w', encoding='utf-8') as f:
+        f.write(text)
