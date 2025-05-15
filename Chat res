@@ -432,25 +432,38 @@ def load_custom_text_classification_dataset(data_path, seed=123):
     return ((train_texts, train_labels),
             (test_texts, test_labels))
 
-
 import os
 import pandas as pd
+from sklearn.model_selection import train_test_split
 
-# Load your CSV
-df = pd.read_csv("your_dataset.csv")
+# CONFIGURATION
+csv_path = "your_dataset.csv"
+output_dir = "your_data_path"  # where "train/" and "test/" folders will go
 
-# Target folder
-output_dir = "your_data_path/train"  # or test
+# Load CSV
+df = pd.read_csv(csv_path)
 
-# Create folders and write files
-for label in df['label'].unique():
-    label_dir = os.path.join(output_dir, label.lower().replace(" ", ""))
-    os.makedirs(label_dir, exist_ok=True)
+# Normalize label values to folder-friendly format
+df['label'] = df['label'].str.lower().str.replace(" ", "").str.strip()
 
-# Save each text to a separate file
-for i, row in df.iterrows():
-    label = row['label'].lower().replace(" ", "")
-    text = row['text']
-    file_path = os.path.join(output_dir, label, f"sample_{i}.txt")
-    with open(file_path, 'w', encoding='utf-8') as f:
-        f.write(text)
+# Split into train and test (80/20)
+train_df, test_df = train_test_split(df, test_size=0.2, stratify=df['label'], random_state=42)
+
+# Helper to write text files
+def write_split(split_name, split_df):
+    for label in split_df['label'].unique():
+        label_dir = os.path.join(output_dir, split_name, label)
+        os.makedirs(label_dir, exist_ok=True)
+
+    for i, row in split_df.iterrows():
+        label = row['label']
+        text = row['text']
+        file_path = os.path.join(output_dir, split_name, label, f"sample_{i}.txt")
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(text)
+
+# Write train and test splits
+write_split("train", train_df)
+write_split("test", test_df)
+
+print(" Dataset has been split and saved as folders.")
