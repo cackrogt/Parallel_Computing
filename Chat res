@@ -1,555 +1,165 @@
-diff --git a/third_party/blink/renderer/core/dom/container_node.cc b/third_party/blink/renderer/core/dom/container_node.cc
-index 153a9d90eb..a1816b0f0a 100644
---- a/third_party/blink/renderer/core/dom/container_node.cc
-+++ b/third_party/blink/renderer/core/dom/container_node.cc
-@@ -433,6 +433,9 @@ void ContainerNode::InsertBefore(const VectorOf<Node>& new_children,
-     AppendChildren(new_children, exception_state);
-     return;
-   }
-+  if(ref_child) {
-+    LOG(INFO)<<__FUNCTION__<<"TinSeln we do get inserBefore " + ref_child->nodeName().Utf8();
-+  }
- 
-   if (!EnsurePreInsertionValidity(/*new_child*/ nullptr, &new_children,
-                                   ref_child, /*old_child*/ nullptr,
-diff --git a/third_party/blink/renderer/core/dom/document.cc b/third_party/blink/renderer/core/dom/document.cc
-index b8e7a889e8..655591b2b2 100644
---- a/third_party/blink/renderer/core/dom/document.cc
-+++ b/third_party/blink/renderer/core/dom/document.cc
-@@ -63,6 +63,7 @@
- #include "services/network/public/mojom/permissions_policy/permissions_policy_feature.mojom-blink-forward.h"
- #include "services/network/public/mojom/trust_tokens.mojom-blink.h"
- #include "services/network/public/mojom/web_sandbox_flags.mojom-blink.h"
-+#include "third_party/blink/renderer/bindings/core/v8/v8_mutation_observer_init.h"
- #include "third_party/blink/public/common/features.h"
- #include "third_party/blink/public/common/permissions_policy/document_policy_features.h"
- #include "third_party/blink/public/common/privacy_budget/identifiability_sample_collector.h"
-@@ -132,6 +133,9 @@
- #include "third_party/blink/renderer/core/display_lock/display_lock_context.h"
- #include "third_party/blink/renderer/core/display_lock/display_lock_document_state.h"
- #include "third_party/blink/renderer/core/display_lock/display_lock_utilities.h"
-+#include "third_party/blink/renderer/core/dom/mutation_observer.h"
-+#include "third_party/blink/renderer/core/dom/mutation_observer_options.h"
-+#include "third_party/blink/renderer/core/dom/mutation_record.h"
- #include "third_party/blink/renderer/core/dom/attr.h"
- #include "third_party/blink/renderer/core/dom/beforeunload_event_listener.h"
- #include "third_party/blink/renderer/core/dom/cdata_section.h"
-@@ -7416,12 +7420,294 @@ void Document::OnPrepareToStopParsing() {
-       MilestoneForDelayedAsyncScript::kFinishedParsing);
- }
- 
-+void ComputeBeforeContent(Element* element) {
-+    // if (!element || !element->GetComputedStyle())
-+    //     return String();
-+    // const ComputedStyle* style = element->GetComputedStyle();
-+    // return style->Content();  // Returns `::before` content if defined
-+
-+    LayoutObject* layout_object = element->GetLayoutObject();
-+    LayoutObject* before = layout_object ? layout_object->SlowFirstChild() : nullptr;
-+       if (before && before->IsBeforeContent()) {
-+           // You have the ::before pseudo-element
-+               LOG(INFO) << "TinSeln ProgressTracking." << 
-+                               "Document load progress updated. ";
-+       }
-+}
-+
-+Element* GetPreviousElement(Node* node) {
-+        Node* previous = node->previousSibling();
-+        while (previous && !DynamicTo<Element>(previous)) {
-+            previous = previous->previousSibling();
-+        }
-+        return DynamicTo<Element>(previous);
-+    }
-+
-+// Get closest next sibling element (skip text nodes, comments, etc.)
-+Element* GetNextElement(Node* node) {
-+    Node* next = node->nextSibling();
-+    while (next && !DynamicTo<Element>(next)) {
-+        next = next->nextSibling();
-+    }
-+    return DynamicTo<Element>(next);
-+}
-+
-+void TraverseAllElements(Node& root, String tag) {
-+       for(Node* element = &root; element; 
-+               element = NodeTraversal::Next(*element)) {
-+               if(Element* elem = DynamicTo<Element> (element)) {
-+                       bool already_tagged = false;
-+                       if(elem->HasClass()) {
-+                   const SpaceSplitString& class_list = elem->ClassNames();
-+                   for (const auto& class_name : class_list) {
-+                       if (class_name.Contains("_Loaded_Ankit_")) {
-+                               already_tagged = true;
-+                               break;
-+                       }
-+                   }
-+               }
-+               if(already_tagged) continue;
-+                       String str(std:: to_string(
-+                               base::TimeTicks::Now().since_origin().InMicroseconds()) +
-+                                "_Loaded_Ankit_");
-+                       str = str + tag;
-+                       const AtomicString adb(str);
-+                       elem->classList().Add(adb);
-+                       // Find the closest previous and next elements
-+            Element* previous_element = GetPreviousElement(elem);
-+            Element* next_element = GetNextElement(elem);
-+
-+            const ComputedStyle* style = elem->GetComputedStyle();
-+            //just something that will not trigger
-+            int z_index = style ? style->ZIndex() : -1;
-+
-+            // Get ID and class names properly
-+            String element_id = elem->HasID() ?
-+               elem->IdForStyleResolution().GetString(): "No_ID";
-+            String class_names;
-+            if(elem->HasClass()) {
-+                   const SpaceSplitString& class_list = elem->ClassNames();
-+                   for (const auto& class_name : class_list) {
-+                       if (!class_names.empty()) {
-+                           class_names + " ";  // Add space separator
-+                       }
-+                       class_names = class_names + class_name;
-+                   }
-+               }
-+
-+            // Print meta info
-+            LOG(INFO) << "TinSeln "<<tag <<" LoadCompleted ObserveMutation Mutation in element: " 
-+            << elem->nodeName();
-+            LOG(INFO) << " TinSeln "<<tag <<" LoadCompleted ObserveMutation - ID: " 
-+            << (element_id.empty() ? "None" : element_id.Utf8().data());
-+            LOG(INFO) << " TinSeln "<<tag <<" LoadCompleted ObserveMutation - Class: " 
-+            << (/*class_names.empty() ? "None" : */class_names.Utf8().data());;
-+            LOG(INFO) << " TinSeln "<<tag <<" LoadCompleted ObserveMutation - Z-Index: " 
-+            << z_index;
-+
-+            LOG(INFO) << "TinSeln "<<tag <<" LoadCompleted ObserveMutation Mutation detected in element: " 
-+            << elem->nodeName();
-+            
-+            if (previous_element) {
-+                LOG(INFO) << "TinSeln "<<tag <<" LoadCompleted ObserveMutation Previous element: " 
-+                << previous_element->nodeName();
-+            } else {
-+                LOG(INFO) << "TinSeln "<<tag <<" LoadCompleted ObserveMutation No previous element.";
-+            }
-+            if (next_element) {
-+                LOG(INFO) << "TinSeln "<<tag <<" LoadCompleted ObserveMutation Next element: " 
-+                << next_element->nodeName();
-+            } else {
-+                LOG(INFO) << "TinSeln "<<tag <<" LoadCompleted ObserveMutation No next element.";
-+            }
-+               }
-+       }
-+}
-+
-+void Document::OnLoadProgressChanged(double progress) {
-+  LOG(INFO) << "TinSeln ProgressTracking. Document load progress updated: " 
-+       << progress;
-+  load_progress_ = progress;
-+  if(progress >= 1.0f) {
-+       if(Document* root = GetFrame()->GetDocument()) {
-+               TraverseAllElements(*root, "LoadCompleted");
-+       }
-+  }
-+  // TODO: Add custom behavior for handling progress updates in the document.
-+}
-+
-+void OnDomContentLoaded(Document* root_doc_element, double load_progress) {
-+  LOG(INFO) << "TinSeln DomContentLoaded. " ;
-+       
-+  if(load_progress >= 1.0f) {
-+       if(Document* root = root_doc_element) {
-+               TraverseAllElements(*root, "DomContentLoaded");
-+       }
-+  }
-+  // TODO: Add custom behavior for handling progress updates in the document.
-+}
-+
-+// Mutation observer changes
-+class DocMutationObserver : public MutationObserver::Delegate {
-+ public:
-+  explicit DocMutationObserver(Element& doc)
-+      : doc_(doc), observer_(MutationObserver::Create(this)) {
-+    MutationObserverInit* init = MutationObserverInit::Create();
-+    init->setCharacterData(true);
-+    init->setChildList(true);
-+    init->setSubtree(false);
-+    observer_->observe(doc_, init, ASSERT_NO_EXCEPTION);
-+  }
-+
-+  ExecutionContext* GetExecutionContext() const override {
-+    return doc_->GetExecutionContext();
-+  }
-+
-+  void Deliver(const MutationRecordVector& records,
-+               MutationObserver&) override {
-+       if (!doc_) return;
-+       if(!doc_->GetDocument().GetFrame()) return;
-+       auto* element_frame = doc_->GetDocument().GetFrame();
-+       if(!element_frame) return;
-+       if(!element_frame->IsOutermostMainFrame()) {
-+               LOG(INFO)<< __FUNCTION__ << "TinSeln NotOuterMost";
-+       }
-+       if(doc_->GetDocument().LoadProgress() < 1.0f) return;
-+       LOG(INFO) << __FUNCTION__ << "TinSeln we get some ObserveMutation";
-+    
-+
-+       // for (const auto& record : records) {
-+    //         Node* mutated_node = record->target();
-+    //         Element* closest_container = mutated_node->parentElement();
-+
-+    //         if (closest_container) {
-+    //             LOG(INFO) << "TinSeln ObserveMutation Mutation detected in closest container: "
-+    //                       << closest_container->nodeName();
-+    //         } else {
-+    //             LOG(INFO) << "TinSeln ObserveMutation Mutation detected but no container found.";
-+    //         }
-+    //     }
-+
-+    for (const auto& record : records) {
-+            Node* mutated_node = record->target();
-+            if (!mutated_node)
-+                continue;
-+
-+            TraverseAllElements(*mutated_node, "_Mutatued_Traversal_");
-+            // Get the mutated element (only if it's an Element)
-+            Element* mutated_element = DynamicTo<Element>(mutated_node);
-+            if (!mutated_element)
-+                continue;
-+
-+            /*String str(std:: to_string(
-+                               base::TimeTicks::Now().since_origin().InMicroseconds()) + "_Mutated_");
-+                       const AtomicString adb(str);
-+                       mutated_element->classList().Add(adb);*/
-+
-+            // Find the closest previous and next elements
-+            Element* previous_element = GetPreviousElement(mutated_element);
-+            Element* next_element = GetNextElement(mutated_element);
-+
-+            const ComputedStyle* style = mutated_element->GetComputedStyle();
-+            int z_index = style ? style->ZIndex() : -1;
-+
-+            // Get ID and class names properly
-+            String element_id = mutated_element->HasID() ?
-+               mutated_element->IdForStyleResolution().GetString(): "No_ID";
-+            String class_names;
-+            if(mutated_element->HasClass()) {
-+                   const SpaceSplitString& class_list = mutated_element->ClassNames();
-+                   for (const auto& class_name : class_list) {
-+                       if (!class_names.empty()) {
-+                           class_names + " ";  // Add space separator
-+                       }
-+                       class_names = class_names + class_name;
-+                   }
-+               }
-+
-+            // Print meta info
-+            LOG(INFO) << "TinSeln ObserveMutation Mutation in element: " << mutated_element->nodeName();
-+            LOG(INFO) << " TinSeln ObserveMutation - ID: " << (element_id.empty() ? "None" : element_id.Utf8().data());
-+            LOG(INFO) << " TinSeln ObserveMutation - Class: " << (class_names.empty() ? "None" : class_names.Utf8().data());;
-+            LOG(INFO) << " TinSeln ObserveMutation - Z-Index: " << z_index;
-+
-+            LOG(INFO) << "TinSeln ObserveMutation Mutation detected in element: " << mutated_element->nodeName();
-+            if (previous_element) {
-+                LOG(INFO) << "TinSeln ObserveMutation Previous element: " << previous_element->nodeName();
-+            } else {
-+                LOG(INFO) << "TinSeln ObserveMutation No previous element.";
-+            }
-+            if (next_element) {
-+                LOG(INFO) << "TinSeln ObserveMutation Next element: " << next_element->nodeName();
-+            } else {
-+                LOG(INFO) << "TinSeln ObserveMutation No next element.";
-+            }
-+        }
-+    
-+
-+    // Get parent element
-+    // Element* parent = doc_->parentElement();
-+    // if (parent) {
-+    //     LOG(INFO) << "TinSeln Parent Element: " << parent->nodeName().Utf8().c_str();
-+    // } else {
-+    //     LOG(INFO) << __FUNCTION__ << "TinSeln ObserveMutation No parent element found.\n";
-+    // }
-+
-+    // // First level of children
-+    // LOG(INFO) << __FUNCTION__ << "TinSeln ObserveMutation First-level children:\n";
-+    // for (Element* child = doc_->firstElementChild(); child; 
-+    //      child = child->nextElementSibling()) {
-+    //     LOG(INFO) << __FUNCTION__ << " - " << child->nodeName().Utf8().c_str();
-+
-+    //     // Second level of children
-+    //     printf("  TinSeln ObserveMutation Second-level children:\n");
-+    //     for (Element* grandchild = child->firstElementChild(); grandchild;
-+    //          grandchild = grandchild->nextElementSibling()) {
-+    //         LOG(INFO) << __FUNCTION__ << " - "<< grandchild->nodeName().Utf8().c_str();
-+    //     }
-+    // }
-+  }
-+
-+  void Logger(){
-+    LOG(INFO) << __FUNCTION__ << "TinSeln Logger we get some mutation";
-+  }
-+
-+  void Trace(Visitor* visitor) const override {
-+    visitor->Trace(doc_);
-+    visitor->Trace(observer_);
-+    MutationObserver::Delegate::Trace(visitor);
-+  }
-+
-+ private:
-+  Member<Element> doc_;
-+  Member<MutationObserver> observer_;
-+};
-+
-+void Document::AddMutationObserversToElements() {
-+       LocalFrame* frame = GetFrame();
-+    if (!frame)
-+        return;
-+
-+    DocMutationObserver* dmo_doc_ele = 
-+    MakeGarbageCollected<DocMutationObserver>(*documentElement());
-+       dmo_doc_ele->Logger();
-+       LOG(INFO) << " TinSeln Observing <DocumentElement> element.";
-+    // for (auto* element : *getElementsByTagName(AtomicString("body"))) {
-+    //         DocMutationObserver* dmo = MakeGarbageCollected<DocMutationObserver>(*element);
-+    //         dmo->Logger();
-+    //     LOG(INFO) << " TinSeln Observing <body> element.";
-+    // }
-+}
-+
- void Document::FinishedParsing() {
-   TRACE_EVENT_WITH_FLOW0("blink", "Document::FinishedParsing",
-                          TRACE_ID_LOCAL(this),
-                          TRACE_EVENT_FLAG_FLOW_IN | TRACE_EVENT_FLAG_FLOW_OUT);
-   DCHECK(!GetScriptableDocumentParser() || !parser_->IsParsing());
-   DCHECK(!GetScriptableDocumentParser() || ready_state_ != kLoading);
-+
-+  
-+
-   SetParsingState(kInDOMContentLoaded);
-   DocumentParserTiming::From(*this).MarkParserStop();
- 
-@@ -7496,6 +7782,10 @@ void Document::FinishedParsing() {
- 
-     frame->GetIdlenessDetector()->DomContentLoadedEventFired();
- 
-+    AddMutationObserversToElements();
-+    OnDomContentLoaded(GetFrame()->GetDocument(), load_progress_);
-+    LOG(INFO) << "TinSeln Mutation observers added to selected elements.";
-+
-     if (ShouldMarkFontPerformance()) {
-       FontPerformance::MarkDomContentLoaded();
-     }
-diff --git a/third_party/blink/renderer/core/dom/document.h b/third_party/blink/renderer/core/dom/document.h
-index e9fa78d2af..5b4830ebfe 100644
---- a/third_party/blink/renderer/core/dom/document.h
-+++ b/third_party/blink/renderer/core/dom/document.h
-@@ -400,6 +400,12 @@ class CORE_EXPORT Document : public ContainerNode,
-   void SetMediaFeatureEvaluated(int feature);
-   bool WasMediaFeatureEvaluated(int feature);
- 
-+  // For Progress Tracking.
-+  void OnLoadProgressChanged(double progress);
-+  double LoadProgress() const { return load_progress_; }
-+  double load_progress_ = 0.0;
-+  // End of Progress Tracking.
-+
-   using TreeScope::getElementById;
- 
-   bool IsInitialEmptyDocument() const { return is_initial_empty_document_; }
-@@ -1441,6 +1447,7 @@ class CORE_EXPORT Document : public ContainerNode,
-   void OnLargestContentfulPaintUpdated();
-   void OnPrepareToStopParsing();
-   void FinishedParsing();
-+  void AddMutationObserversToElements();
- 
-   void SetEncodingData(const DocumentEncodingData& new_data);
-   const WTF::TextEncoding& Encoding() const {
-diff --git a/third_party/blink/renderer/core/loader/progress_tracker.cc b/third_party/blink/renderer/core/loader/progress_tracker.cc
-index 280c3ef6b9..bd4e40503f 100644
---- a/third_party/blink/renderer/core/loader/progress_tracker.cc
-+++ b/third_party/blink/renderer/core/loader/progress_tracker.cc
-@@ -28,6 +28,7 @@
- #include "third_party/blink/public/common/loader/loader_constants.h"
- #include "third_party/blink/public/mojom/frame/frame.mojom-blink.h"
- #include "third_party/blink/public/web/web_settings.h"
-+#include "third_party/blink/renderer/core/dom/document.h"
- #include "third_party/blink/renderer/core/frame/local_frame.h"
- #include "third_party/blink/renderer/core/frame/local_frame_client.h"
- #include "third_party/blink/renderer/core/frame/local_frame_view.h"
-@@ -121,6 +122,9 @@ void ProgressTracker::SendFinalProgress() {
-     return;
-   progress_value_ = 1;
-   frame_->GetLocalFrameHostRemote().DidChangeLoadProgress(progress_value_);
-+  if (frame_->GetDocument() /*&& frame_->IsOutermostMainFrame()*/) {
-+      frame_->GetDocument()->OnLoadProgressChanged(progress_value_);
-+    }
- }
- 
- void ProgressTracker::WillStartLoading(uint64_t identifier,
-@@ -217,6 +221,9 @@ void ProgressTracker::MaybeSendProgress() {
-     frame_->GetLocalFrameHostRemote().DidChangeLoadProgress(progress_value_);
-     last_notified_progress_value_ = progress_value_;
-     last_notified_progress_time_ = now;
-+    if (frame_->GetDocument() /*&& frame_->IsOutermostMainFrame()*/) {
-+      frame_->GetDocument()->OnLoadProgressChanged(progress_value_);
-+    }
-   }
- }
-
 import os
 import random
 import numpy as np
-
-def load_custom_text_classification_dataset(data_path, seed=123):
-    categories = ['install', 'notification', 'neither']
-    label_map = {
-        'install': 0,
-        'notification': 1,
-        'neither': 2
-    }
-
-    def load_data(split):
-        texts = []
-        labels = []
-        for category in categories:
-            dir_path = os.path.join(data_path, split, category)
-            for fname in sorted(os.listdir(dir_path)):
-                if fname.endswith('.txt'):
-                    with open(os.path.join(dir_path, fname), encoding='utf-8') as f:
-                        texts.append(f.read())
-                    labels.append(label_map[category])
-        # Shuffle text-label pairs together
-        combined = list(zip(texts, labels))
-        random.seed(seed)
-        random.shuffle(combined)
-        texts, labels = zip(*combined)
-        return list(texts), np.array(labels)
-
-    train_texts, train_labels = load_data('train')
-    test_texts, test_labels = load_data('test')
-
-    return ((train_texts, train_labels),
-            (test_texts, test_labels))
-
-import os
-import pandas as pd
+import tensorflow as tf
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_selection import SelectKBest, f_classif
 from sklearn.model_selection import train_test_split
 
+# -----------------------------
 # CONFIGURATION
-csv_path = "your_dataset.csv"
-output_dir = "your_data_path"  # where "train/" and "test/" folders will go
+# -----------------------------
+DATA_PATH = "your_data_path"  # CHANGE this to your dataset folder
+NGRAM_RANGE = (1, 2)
+TOP_K = 20000
+TOKEN_MODE = 'word'
+MIN_DOCUMENT_FREQUENCY = 2
 
-# Load CSV
-df = pd.read_csv(csv_path)
+# -----------------------------
+# DATA LOADING FROM FOLDERS
+# -----------------------------
+def load_custom_text_classification_dataset(data_path, seed=123):
+    train_texts, train_labels = [], []
+    test_texts, test_labels = [], []
 
-# Normalize label values to folder-friendly format
-df['label'] = df['label'].str.lower().str.replace(" ", "").str.strip()
+    for split in ['train', 'test']:
+        split_path = os.path.join(data_path, split)
+        class_dirs = sorted(os.listdir(split_path))
 
-# Split into train and test (80/20)
-train_df, test_df = train_test_split(df, test_size=0.2, stratify=df['label'], random_state=42)
+        for idx, class_name in enumerate(class_dirs):
+            class_dir = os.path.join(split_path, class_name)
+            if not os.path.isdir(class_dir):
+                continue
+            for fname in sorted(os.listdir(class_dir)):
+                if fname.endswith('.txt'):
+                    with open(os.path.join(class_dir, fname), encoding='utf-8') as f:
+                        text = f.read()
+                    if split == 'train':
+                        train_texts.append(text)
+                        train_labels.append(idx)
+                    else:
+                        test_texts.append(text)
+                        test_labels.append(idx)
 
-# Helper to write text files
-def write_split(split_name, split_df):
-    for label in split_df['label'].unique():
-        label_dir = os.path.join(output_dir, split_name, label)
-        os.makedirs(label_dir, exist_ok=True)
+    # Shuffle with seed
+    random.seed(seed)
+    combined = list(zip(train_texts, train_labels))
+    random.shuffle(combined)
+    train_texts, train_labels = zip(*combined)
 
-    for i, row in split_df.iterrows():
-        label = row['label']
-        text = row['text']
-        file_path = os.path.join(output_dir, split_name, label, f"sample_{i}.txt")
-        with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(text)
+    return ((list(train_texts), np.array(train_labels)),
+            (test_texts, np.array(test_labels)))
 
-# Write train and test splits
-write_split("train", train_df)
-write_split("test", test_df)
+# -----------------------------
+# N-GRAM VECTORIZATION
+# -----------------------------
+def ngram_vectorize(train_texts, train_labels, val_texts):
+    kwargs = {
+        'ngram_range': NGRAM_RANGE,
+        'dtype': 'int32',
+        'strip_accents': 'unicode',
+        'decode_error': 'replace',
+        'analyzer': TOKEN_MODE,
+        'min_df': MIN_DOCUMENT_FREQUENCY,
+    }
 
-print(" Dataset has been split and saved as folders.")
+    vectorizer = TfidfVectorizer(**kwargs)
+    x_train = vectorizer.fit_transform(train_texts)
+    x_val = vectorizer.transform(val_texts)
 
+    selector = SelectKBest(f_classif, k=min(TOP_K, x_train.shape[1]))
+    selector.fit(x_train, train_labels)
+    x_train = selector.transform(x_train).astype('float32')
+    x_val = selector.transform(x_val).astype('float32')
+    return x_train, x_val
 
-from tensorflow.python.keras import models
-from tensorflow.python.keras.layers import Dense
-from tensorflow.python.keras.layers import Dropout
-
+# -----------------------------
+# MODEL BUILDING
+# -----------------------------
 def _get_last_layer_units_and_activation(num_classes):
-        activation = 'softmax'
-        units = num_classes
-    return units, activation
+    return num_classes, 'softmax'
 
 def mlp_model(layers, units, dropout_rate, input_shape, num_classes):
     op_units, op_activation = _get_last_layer_units_and_activation(num_classes)
-    model = models.Sequential()
-    model.add(Dropout(rate=dropout_rate, input_shape=input_shape))
+    model = tf.keras.Sequential()
+    model.add(tf.keras.layers.Dropout(rate=dropout_rate, input_shape=input_shape))
 
-    for _ in range(layers-1):
-        model.add(Dense(units=units, activation='relu'))
-        model.add(Dropout(rate=dropout_rate))
+    for _ in range(layers - 1):
+        model.add(tf.keras.layers.Dense(units=units, activation='relu'))
+        model.add(tf.keras.layers.Dropout(rate=dropout_rate))
 
-    model.add(Dense(units=op_units, activation=op_activation))
+    model.add(tf.keras.layers.Dense(units=op_units, activation=op_activation))
     return model
-	
-	
+
+# -----------------------------
+# TRAINING FUNCTION
+# -----------------------------
 def train_ngram_model(data,
                       learning_rate=1e-3,
-                      epochs=1000,
+                      epochs=10,
                       batch_size=128,
                       layers=2,
                       units=64,
                       dropout_rate=0.2):
 
     (train_texts, train_labels), (val_texts, val_labels) = data
+    num_classes = len(np.unique(train_labels))
 
-    # Verify that validation labels are in the same range as training labels.
-    num_classes = explore_data.get_num_classes(train_labels)
     unexpected_labels = [v for v in val_labels if v not in range(num_classes)]
     if len(unexpected_labels):
-        raise ValueError('Unexpected label values found in the validation set:'
-                         ' {unexpected_labels}. Please make sure that the '
-                         'labels in the validation set are in the same range '
-                         'as training labels.'.format(
-                             unexpected_labels=unexpected_labels))
+        raise ValueError(f"Unexpected label values in validation set: {unexpected_labels}")
 
-    # Vectorize texts.
-    x_train, x_val = vectorize_data.ngram_vectorize(
-        train_texts, train_labels, val_texts)
+    # Vectorize
+    x_train, x_val = ngram_vectorize(train_texts, train_labels, val_texts)
 
-    # Create model instance.
-    model = build_model.mlp_model(layers=layers,
-                                  units=units,
-                                  dropout_rate=dropout_rate,
-                                  input_shape=x_train.shape[1:],
-                                  num_classes=num_classes)
+    # Build model
+    model = mlp_model(layers=layers,
+                      units=units,
+                      dropout_rate=dropout_rate,
+                      input_shape=x_train.shape[1:],
+                      num_classes=num_classes)
 
-    # Compile model with learning parameters.
-    if num_classes == 2:
-        loss = 'binary_crossentropy'
-    else:
-        loss = 'sparse_categorical_crossentropy'
-    optimizer = tf.keras.optimizers.Adam(lr=learning_rate)
-    model.compile(optimizer=optimizer, loss=loss, metrics=['acc'])
+    # Compile model
+    loss = 'binary_crossentropy' if num_classes == 2 else 'sparse_categorical_crossentropy'
+    optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
+    model.compile(optimizer=optimizer, loss=loss, metrics=['accuracy'])
 
-    # Create callback for early stopping on validation loss. If the loss does
-    # not decrease in two consecutive tries, stop training.
-    callbacks = [tf.keras.callbacks.EarlyStopping(
-        monitor='val_loss', patience=2)]
+    callbacks = [tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=2)]
 
-    # Train and validate model.
+    # Train model
     history = model.fit(
-            x_train,
-            train_labels,
-            epochs=epochs,
-            callbacks=callbacks,
-            validation_data=(x_val, val_labels),
-            verbose=2,  # Logs once per epoch.
-            batch_size=batch_size)
+        x_train,
+        train_labels,
+        validation_data=(x_val, val_labels),
+        epochs=epochs,
+        batch_size=batch_size,
+        callbacks=callbacks,
+        verbose=2
+    )
 
-    # Print results.
-    history = history.history
-    print('Validation accuracy: {acc}, loss: {loss}'.format(
-            acc=history['val_acc'][-1], loss=history['val_loss'][-1]))
+    print(f"✅ Final val accuracy: {history.history['val_accuracy'][-1]:.4f}")
+    model.save("mlp_ngram_model.h5")
+    return model
 
-    # Save model.
-    model.save('IMDb_mlp_model.h5')
-    return history['val_acc'][-1], history['val_loss'][-1]
+# -----------------------------
+# MAIN SCRIPT
+# -----------------------------
+if __name__ == "__main__":
+    # Load from folder
+    (train_texts, train_labels), (test_texts, test_labels) = load_custom_text_classification_dataset(DATA_PATH)
+
+    # Split train into train/val
+    train_texts, val_texts, train_labels, val_labels = train_test_split(
+        train_texts, train_labels, test_size=0.2, random_state=42, stratify=train_labels
+    )
+
+    # Train model
+    model = train_ngram_model(
+        data=((train_texts, train_labels), (val_texts, val_labels)),
+        learning_rate=1e-3,
+        epochs=10,
+        batch_size=128,
+        layers=2,
+        units=64,
+        dropout_rate=0.2
+    )
