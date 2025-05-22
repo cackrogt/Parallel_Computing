@@ -268,3 +268,10 @@ with open("final_model.tflite", "wb") as f:
 
 print("Exported final_model.tflite (no Flex ops)")
 
+
+2025-05-22 16:13:16.824043: W tensorflow/compiler/mlir/lite/flatbuffer_export.cc:3993] TFLite interpreter needs to link Flex delegate in order to run the model since it contains the following Select TFop(s):
+Flex ops: FlexDenseBincount, FlexRaggedBincount, FlexStaticRegexReplace, FlexStringLower, FlexStringSplitV2
+Details:
+	tf.DenseBincount(tensor<?xi32>, tensor<i32>, tensor<0xi64>) -> (tensor<?xi64>) : {T = i64, Tidx = i32, binary_output = false, device = ""}
+	tf.RaggedBincount(tensor<?xi64>, tensor<*xi64>, tensor<*xi64>, tensor<0xi64>) -> (tensor<*xi64>) : {T = i64, Tidx = i64, binary_output = true, device = ""}
+	tf.StaticRegexReplace(tensor<?x1x!tf_type.string>) -> (tensor<?x1x!tf_type.string>) : {device = "", pattern = "[!\22#$%&()\\*\\+,-\\./:;<=>?@\\[\\\\\\]^_`{|}~\\']", replace_global = true, rewrite = ""}
