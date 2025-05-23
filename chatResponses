@@ -510,3 +510,31 @@ for (int i = 0; i < total_size; ++i) {
     std::cout << "Class " << i << ": " << output[i] << std::endl;
 }
 
+
+
+*******************************************************
+
+
+TfLiteTensor* out_tensor = interpreter->tensor(interpreter->outputs()[0]);
+
+CHECK(out_tensor);
+CHECK(out_tensor->dims);  // ensure dims is not null
+CHECK_EQ(out_tensor->type, kTfLiteFloat32);
+
+// Copy tensor shape into a safe vector
+std::vector<int> shape(out_tensor->dims->data, out_tensor->dims->data + out_tensor->dims->size);
+
+// Safely compute total number of elements
+int total_size = 1;
+for (int dim : shape) {
+    total_size *= dim;
+}
+
+CHECK_GT(total_size, 0);  // validate size
+
+float* output = interpreter->typed_output_tensor<float>(0);
+CHECK(output != nullptr);
+
+for (int i = 0; i < total_size; ++i) {
+    std::cout << "Class " << i << ": " << output[i] << std::endl;
+}
