@@ -1,0 +1,498 @@
+Certainly! Below is a clean and modular C++ code for feeding raw text input into a TensorFlow Lite interpreter, using a predefined vocabulary stored in a C++ file. This will be ready to integrate with Chromium Blink or any C++ application that uses TensorFlow Lite.
+
+
+---
+
+✅ 1. Creating the Vocabulary in C++ (in vocab.cc and vocab.h)
+
+📄 vocab.h — Header File
+
+#pragma once
+
+#include <unordered_map>
+#include <string>
+
+// Returns a map of token → ID as used during model training
+std::unordered_map<std::string, int> GetTokenizerVocab();
+
+📄 vocab.cc — Implementation File
+
+#include "vocab.h"
+
+// Add required includes
+#include <unordered_map>
+#include <string>
+
+// Vocabulary map that was previously built in Python, now embedded in C++
+std::unordered_map<std::string, int> GetTokenizerVocab() {
+    return {
+        {"<OOV>", 1},  // Out of vocabulary token
+        {"install", 2},
+        {"the", 3},
+        {"app", 4},
+        {"now", 5},
+        {"open", 6},
+        {"notification", 7},
+        {"message", 8},
+        {"has", 9},
+        {"been", 10},
+        // Add more tokens as needed
+    };
+}
+
+
+---
+
+✅ 2. Preprocessing Raw Text (Tokenization & Padding)
+
+📄 tokenizer.h — Tokenizer Helper Header
+
+#pragma once
+
+#include <unordered_map>
+#include <string>
+#include <vector>
+
+std::vector<int> Tokenize(const std::string& input, const std::unordered_map<std::string, int>& vocab, int max_len = 20);
+
+📄 tokenizer.cc — Tokenizer Helper Implementation
+
+#include "tokenizer.h"
+#include <sstream>
+#include <algorithm>
+
+// Tokenize the input string into token IDs
+std::vector<int> Tokenize(const std::string& input, const std::unordered_map<std::string, int>& vocab, int max_len) {
+    std::istringstream stream(input);
+    std::string word;
+    std::vector<int> tokens;
+
+    while (stream >> word) {
+        std::transform(word.begin(), word.end(), word.begin(), ::tolower);  // to lowercase
+        auto it = vocab.find(word);
+        tokens.push_back(it != vocab.end() ? it->second : vocab.at("<OOV>"));  // Use OOV for unknown words
+
+        if (tokens.size() >= max_len) break;  // Stop if we reach max sequence length
+    }
+
+    // Pad with zeros if the sequence is shorter than max_len
+    while (tokens.size() < max_len) {
+        tokens.push_back(0);  // pad with zeros
+    }
+
+    return tokens;
+}
+
+
+---
+
+✅ 3. Integrating with TensorFlow Lite Interpreter (in document.cc or Similar)
+
+This section covers how to use the preprocessed input (tokenized IDs) and feed it into a TFLite interpreter.
+
+📄 document.cc — Main Integration File
+
+#include <iostream>
+#include <tensorflow/lite/interpreter.h>
+#include <tensorflow/lite/model.h>
+#include <tensorflow/lite/kernels/register.h>
+#include <tensorflow/lite/interpreter_builder.h>
+#include "vocab.h"
+#include "tokenizer.h"
+
+// Include necessary TFLite headers
+#include <tensorflow/lite/interpreter.h>
+#include <tensorflow/lite/kernels/register.h>
+#include <tensorflow/lite/model.h>
+
+void RunInference(const std::string& input_text) {
+    // Load the model (assuming model.tflite is available in your resource path)
+    std::unique_ptr<tflite::FlatBufferModel> model = tflite::FlatBufferModel::BuildFromFile("model.tflite");
+
+    if (!model) {
+        std::cerr << "Failed to load model!" << std::endl;
+        return;
+    }
+
+    // Create the interpreter
+    tflite::ops::builtin::BuiltinOpResolver resolver;
+    std::unique_ptr<tflite::Interpreter> interpreter;
+    tflite::InterpreterBuilder(*model, resolver)(&interpreter);
+
+    // Allocate tensors for the interpreter
+    interpreter->AllocateTensors();
+
+    // Fetch input tensor
+    int input_idx = interpreter->inputs()[0];
+    TfLiteTensor* input_tensor = interpreter->tensor(input_idx);
+
+    // Get the vocabulary
+    std::unordered_map<std::string, int> vocab = GetTokenizerVocab();
+
+    // Tokenize the input string and get token IDs
+    std::vector<int> input_ids = Tokenize(input_text, vocab);
+
+    // Copy the tokenized input into the tensor
+    std::memcpy(input_tensor->data.i32, input_ids.data(), sizeof(int) * input_ids.size());
+
+    // Invoke the interpreter to run inference
+    if (interpreter->Invoke() != kTfLiteOk) {
+        std::cerr << "Inference failed!" << std::endl;
+        return;
+    }
+
+    // Get output tensor (3 classes: Install App, Notification, Neither)
+    float* output = interpreter->typed_output_tensor<float>(0);
+
+    // Output the scores for each class
+    std::cout << "Prediction scores: [Install App, Notification, Neither]" << std::endl;
+    for (int i = 0; i < 3; ++i) {
+        std::cout << "Class " << i << ": " << output[i] << std::endl;
+    }
+
+    // Determine the predicted class
+    int predicted_class = std::max_element(output, output + 3) - output;
+    std::cout << "Predicted class: " << predicted_class << std::endl;
+}
+
+int main() {
+    // Example input text
+    std::string input_text = "Install the app to get exclusive offers";
+
+    // Run inference with the input text
+    RunInference(input_text);
+
+    return 0;
+}
+
+
+---
+
+✅ 4. Build and Link Dependencies
+
+CMakeLists.txt
+
+Make sure to link all necessary TFLite and TensorFlow dependencies.
+
+cmake_minimum_required(VERSION 3.13)
+
+project(TFLiteExample)
+
+# Set C++ standard
+set(CMAKE_CXX_STANDARD 14)
+
+# Set include directories for TensorFlow Lite
+include_directories(/path/to/tensorflow/tflite/include)
+
+# Set link directories for TensorFlow Lite libraries
+link_directories(/path/to/tensorflow/tflite/lib)
+
+# Add executable
+add_executable(TFLiteInference document.cc vocab.cc tokenizer.cc)
+
+# Link TensorFlow Lite libraries
+target_link_libraries(TFLiteInference tensorflow-lite)
+
+Build Process
+
+1. Prepare TensorFlow Lite with CMake as per the TensorFlow Lite C++ API instructions.
+
+
+2. Ensure model.tflite is accessible by copying it into your project directory.
+
+
+3. Compile the C++ code with the dependencies linked.
+
+
+
+
+---
+
+✅ 5. Expected Behavior
+
+Input: Raw string (e.g., "Install the app to get exclusive offers")
+
+Output: Class prediction scores (for Install App, Notification, Neither)
+
+
+Example Output:
+
+Prediction scores: [Install App, Notification, Neither]
+Class 0: 0.45
+Class 1: 0.35
+Class 2: 0.20
+Predicted class: 0
+
+
+---
+
+✅ Summary
+
+You now have:
+
+Embedded vocabulary in C++ for easy access.
+
+Tokenized input using std::unordered_map in C++.
+
+Inference pipeline that runs in Chromium's Blink or any C++ environment using TFLite.
+
+No need for external JSON files or complex dependencies (C++ version of the model and tokenizer is self-contained).
+
+
+
+---
+
+Would you like a full C++ class encapsulating this logic for easier use or further guidance on the build process?
+
+
+*******************************************************
+
+*****************************************
+
+
+Excellent — let's update your workflow to:
+
+1. Store the tokenizer vocab in a simple text file: word ID format (e.g., install 4)
+
+
+2. Optionally, embed the vocab directly in a C++ .cc file for maximum portability
+
+
+
+
+---
+
+✅ Python: Save Vocab as Plain Text (vocab.txt)
+
+🔄 Replace vocab.json code with:
+
+with open("vocab.txt", "w") as f:
+    for word, idx in tokenizer.word_index.items():
+        f.write(f"{word} {idx}\n")
+print("✅ Saved vocab to vocab.txt")
+
+
+---
+
+✅ C++: Load vocab.txt at Runtime
+
+📄 vocab_loader.h
+
+#pragma once
+
+#include <unordered_map>
+#include <string>
+
+std::unordered_map<std::string, int> LoadVocabFromTextFile(const std::string& path);
+
+
+---
+
+📄 vocab_loader.cc
+
+#include "vocab_loader.h"
+#include <fstream>
+#include <sstream>
+
+std::unordered_map<std::string, int> LoadVocabFromTextFile(const std::string& path) {
+    std::unordered_map<std::string, int> vocab;
+    std::ifstream file(path);
+    std::string word;
+    int id;
+
+    while (file >> word >> id) {
+        vocab[word] = id;
+    }
+
+    return vocab;
+}
+
+
+---
+
+✅ C++: Embed Vocab Directly in Code (Alternative to File)
+
+If you want to compile the vocab into your .cc file, use something like:
+
+📄 embedded_vocab.h
+
+#pragma once
+#include <unordered_map>
+#include <string>
+
+inline std::unordered_map<std::string, int> GetEmbeddedVocab() {
+    return {
+        {"<OOV>", 1},
+        {"install", 2},
+        {"the", 3},
+        {"app", 4},
+        {"now", 5},
+        {"open", 6},
+        {"notification", 7},
+        {"your", 8},
+        {"order", 9},
+        {"has", 10},
+        {"been", 11},
+        {"shipped", 12},
+        // ... continue with rest of vocab
+    };
+}
+
+You can now include this directly in Blink or any C++ binary — no file IO needed.
+
+
+---
+
+✅ Summary
+
+Method	Usage	Pros	Cons
+
+vocab.txt	Runtime loading	Easy to update, test	Requires file access
+Embedded .cc	Compile-time vocab	No IO, Chromium-ready	Needs rebuild for vocab changes
+
+
+
+---
+
+Would you like a small tool to convert vocab.txt into embedded_vocab.h automatically?
+
+*******************************************************
+
+
+To use your TensorFlow Lite model in Chromium Blink (C++), and feed in raw strings (like "Install the app now"), you must tokenize and preprocess those strings in C++, since TFLite does not support string inputs natively in C++.
+
+If you followed the last advice and trained a model that takes int32[20] (token ID sequences), then your minimum required C++ processing is:
+
+
+---
+
+✅ What Must Happen Before Inference
+
+1. Lowercase the string (if that's how you trained your tokenizer).
+
+
+2. Split on whitespace (e.g., str.split()).
+
+
+3. Look up token IDs from vocab.json (Python-trained tokenizer vocab).
+
+
+4. Replace unknowns with <OOV> ID, typically 1.
+
+
+5. Pad or truncate to length 20.
+
+
+6. Feed into the TFLite model as int32[1][20] tensor.
+
+
+
+
+---
+
+✅ Minimal Blink/C++ Tokenization Code Example
+
+🔧 Step 1: Load vocab
+
+Suppose vocab.json looks like:
+
+{
+  "<OOV>": 1,
+  "install": 2,
+  "the": 3,
+  "app": 4,
+  "now": 5,
+  "notification": 6
+}
+
+You can load this in C++ Blink (e.g., in your component):
+
+#include <unordered_map>
+#include <string>
+#include <vector>
+#include <sstream>
+#include <fstream>
+#include <nlohmann/json.hpp>  // Chromium-compatible JSON lib
+
+using json = nlohmann::json;
+
+std::unordered_map<std::string, int> LoadVocab(const std::string& path) {
+    std::ifstream f(path);
+    json j;
+    f >> j;
+
+    std::unordered_map<std::string, int> vocab;
+    for (auto& [word, id] : j.items()) {
+        vocab[word] = id;
+    }
+    return vocab;
+}
+
+
+---
+
+🧠 Step 2: Tokenize + Pad
+
+std::vector<int> Tokenize(const std::string& input, const std::unordered_map<std::string, int>& vocab, int max_len = 20) {
+    std::istringstream stream(input);
+    std::string word;
+    std::vector<int> tokens;
+
+    while (stream >> word) {
+        std::transform(word.begin(), word.end(), word.begin(), ::tolower);  // to lowercase
+        auto it = vocab.find(word);
+        tokens.push_back(it != vocab.end() ? it->second : vocab.at("<OOV>"));
+
+        if (tokens.size() >= max_len) break;
+    }
+
+    while (tokens.size() < max_len) {
+        tokens.push_back(0);  // pad with zeros
+    }
+
+    return tokens;
+}
+
+
+---
+
+🚀 Step 3: Feed Into TFLite Interpreter
+
+int input_idx = interpreter->inputs()[0];
+TfLiteTensor* input_tensor = interpreter->tensor(input_idx);
+
+std::vector<int> input_ids = Tokenize("Install the app now", vocab);
+std::memcpy(input_tensor->data.i32, input_ids.data(), sizeof(int) * input_ids.size());
+
+interpreter->Invoke();
+
+float* output = interpreter->typed_output_tensor<float>(0);
+for (int i = 0; i < 3; ++i) {
+    LOG(INFO) << "Score class " << i << ": " << output[i];
+}
+
+
+---
+
+✅ Summary
+
+Step	You Must
+
+Lowercase	std::transform(..., ::tolower)
+Split	std::istringstream
+Vocab lookup	Use std::unordered_map
+OOV fallback	Use vocab.at("<OOV>")
+Pad to 20	Add zeros
+Input type	int32[1][20]
+
+
+
+---
+
+Would you like a full Chromium-compatible .h and .cc pair that wraps all this into a reusable class (e.g., TfLiteTextClassifier)?
+
+*******************************************************
+
+
+
+
