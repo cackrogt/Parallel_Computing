@@ -538,3 +538,18 @@ CHECK(output != nullptr);
 for (int i = 0; i < total_size; ++i) {
     std::cout << "Class " << i << ": " << output[i] << std::endl;
 }
+
+************************************************************************
+
+base::FilePath source_root;
+  if (!base::PathService::Get(base::DIR_SOURCE_ROOT, &source_root)) {
+    LOG(ERROR) << "Failed to get DIR_SOURCE_ROOT";
+    return;
+  }
+
+  base::FilePath model_path = source_root.AppendASCII("components/xyz/browser/abc.tflite");
+
+  if (!base::PathExists(model_path)) {
+    LOG(ERROR) << "Model file not found: " << model_path.value();
+    return;
+  }
