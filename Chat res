@@ -275,3 +275,139 @@ Details:
 	tf.DenseBincount(tensor<?xi32>, tensor<i32>, tensor<0xi64>) -> (tensor<?xi64>) : {T = i64, Tidx = i32, binary_output = false, device = ""}
 	tf.RaggedBincount(tensor<?xi64>, tensor<*xi64>, tensor<*xi64>, tensor<0xi64>) -> (tensor<*xi64>) : {T = i64, Tidx = i64, binary_output = true, device = ""}
 	tf.StaticRegexReplace(tensor<?x1x!tf_type.string>) -> (tensor<?x1x!tf_type.string>) : {device = "", pattern = "[!\22#$%&()\\*\\+,-\\./:;<=>?@\\[\\\\\\]^_`{|}~\\']", replace_global = true, rewrite = ""}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+To use this logic in C++ within Chromium's document.cc, you'll need to traverse the DOM and evaluate style/layout conditions from C++. Since Chromium uses Blink, this involves:
+
+1. Getting all <div> elements.
+
+
+2. Accessing computed style.
+
+
+3. Accessing layout (bounding rect).
+
+
+4. Checking each of your conditions manually.
+
+
+
+
+---
+
+🔧 Key Blink Classes Used
+
+Document (from document.cc)
+
+Element / HTMLElement
+
+LayoutObject and LayoutBox
+
+ComputedStyle
+
+Document::GetElementsByTagName
+
+Element::GetLayoutObject()
+
+Element::ComputedStyle()
+
+
+
+---
+
+✅ Sample C++ Code for document.cc
+
+#include "third_party/blink/renderer/core/dom/document.h"
+#include "third_party/blink/renderer/core/dom/element.h"
+#include "third_party/blink/renderer/core/dom/node_list.h"
+#include "third_party/blink/renderer/core/layout/layout_box.h"
+#include "third_party/blink/renderer/core/layout/layout_object.h"
+#include "third_party/blink/renderer/core/style/computed_style.h"
+#include "third_party/blink/renderer/core/css/property_id.h"
+
+void Document::FindModals() {
+  HeapVector<Member<Element>> modal_candidates;
+
+  // 1. Get all div elements
+  Element* root = this->documentElement();
+  if (!root) return;
+
+  auto* divs = GetElementsByTagName("div");
+
+  for (unsigned i = 0; i < divs->length(); ++i) {
+    Element* div = To<Element>(divs->item(i));
+
+    // 2. Must be attached and have a layout object
+    LayoutObject* layout = div->GetLayoutObject();
+    if (!layout || !layout->IsBox()) continue;
+
+    LayoutBox* box = To<LayoutBox>(layout);
+    const ComputedStyle* style = div->GetComputedStyle();
+    if (!style) continue;
+
+    // 3. Get bounding rect (layout size)
+    float height = box->Size().Height();
+    float width = box->Size().Width();
+
+    float win_height = GetFrame()->View()->ViewportHeight();
+    float win_width = GetFrame()->View()->ViewportWidth();
+
+    bool height_ok = height >= 0.7f * win_height;
+    bool width_ok = width >= 0.7f * win_width;
+
+    // 4. Check position: fixed or absolute
+    auto position = style->Position();
+    bool position_ok = position == EPosition::kFixed || position == EPosition::kAbsolute;
+
+    // 5. z-index > 100
+    int z_index = style->ZIndex();
+    bool z_index_ok = style->HasAutoZIndex() == false && z_index > 100;
+
+    // 6. display not none, visibility not hidden
+    bool display_ok = style->Display() != EDisplay::kNone;
+    bool visibility_ok = style->Visibility() != EVisibility::kHidden;
+
+    if (height_ok && width_ok && position_ok && z_index_ok && display_ok && visibility_ok) {
+      modal_candidates.push_back(div);
+    }
+  }
+
+  // Example: Print or store modal divs
+  for (Element* modal : modal_candidates) {
+    LOG(INFO) << "Modal candidate: " << modal->DebugName();
+  }
+}
+
+
+---
+
+🧠 Notes:
+
+This method must be added to Document (in document.cc and declared in document.h).
+
+You may want to call it from a lifecycle point like DOMContentLoaded.
+
+GetFrame()->View() gives you the viewport for size checks.
+
+Uses ComputedStyle, not getComputedStyle() (that’s JS).
+
+Uses LayoutBox to get rendered size.
+
+
+
+---
+
+Would you like this to be called automatically during some lifecycle event, or would you prefer to trigger it manually for now?
+
