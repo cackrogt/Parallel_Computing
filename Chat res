@@ -411,3 +411,156 @@ Uses LayoutBox to get rendered size.
 
 Would you like this to be called automatically during some lifecycle event, or would you prefer to trigger it manually for now?
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Problems Solved While Working on document.cc
+
+1. Lifecycle Hook Ordering
+Fixed ordering of document lifecycle phases (parsing, style update, layout, paint) so hooks run consistently and don’t get skipped in nested update cycles.
+
+
+2. UpdateStyleAndLayoutTree Safety
+Ensured safe skipping of children during style/layout updates without dereferencing invalid nodes, following the Blink pattern.
+
+
+3. Avoiding Redundant Style Recalculations
+Added checks to prevent duplicate style updates when multiple mutations trigger the same lifecycle path.
+
+
+4. Safe Node Traversal
+Used NodeTraversal::Next with ancestor checks to allow skipping of children while still walking the tree correctly.
+
+
+5. Boundary-Aware Traversal
+Corrected handling of NodeTraversal::Next boundaries to stop traversal where intended (e.g., at subtree roots).
+
+
+6. Mutation Observer Integration
+Implemented MutationObserverDelegate::Deliver correctly, making sure batched mutation records are flushed only at safe lifecycle points.
+
+
+7. Preventing Re-entrancy During Mutation Delivery
+Added guards so mutation observers don’t recursively trigger themselves during document updates.
+
+
+8. Efficient Attribute Change Notifications
+Optimized mutation records for attribute changes so repeated identical changes don’t flood the observer queue.
+
+
+9. NodeName Checks for Specific Tags
+Normalized tag name checks (like ol, ul, il) to be case-insensitive and consistent across traversal logic.
+
+
+10. GC Safety With Oilpan
+Converted raw pointers to Member<> and WeakMember<> where necessary, avoiding use-after-free crashes during garbage collection.
+
+
+11. Lifecycle Consistency With Detached Documents
+Ensured that lifecycle hooks and observers don’t run on detached documents, preventing null dereferences.
+
+
+12. Handling Style/Layout Skips in Detached Subtrees
+Added early exits in update logic to skip fully detached subtrees without walking them.
+
+
+13. Efficient Event Dispatch During Updates
+Fixed ordering of DOM event dispatch (like DOMSubtreeModified) so they occur after style/layout updates, not during them.
+
+
+14. Synchronization With Script Execution
+Ensured that document lifecycle steps align with script execution order, preventing cases where scripts see half-updated trees.
+
+
+15. Reduced Unnecessary GC Barriers
+Cleaned up redundant Oilpan write barriers in tight loops, improving performance in style/layout updates.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+WebContents vs WebView Abstraction
+Clarified the separation between Chromium’s WebContents (the core browser engine host for a page) and Android’s WebView (the embeddable wrapper). This helped us avoid mixing platform glue code with engine logic.
+
+
+2. Headless Mode Initialization
+Ensured headless mode spins up WebContents without UI-related dependencies. For Android, WebView needed a distinct initialization path since it ties into the system View hierarchy.
+
+
+3. Input/Navigation Handling Differences
+Unified navigation and input dispatch:
+
+WebContents: receives direct engine calls.
+
+WebView: wraps input events from Android’s UI thread before passing them into Chromium.
+This fixed mismatches when simulating headless interactions.
+
+
+
+4. Lifecycle Synchronization
+Resolved mismatches in lifecycle (create, attach, detach, destroy):
+
+WebContents lifecycle is Chromium-driven.
+
+WebView lifecycle depends on Android app callbacks.
+Added synchronization so headless tests don’t see dangling WebContents after a WebView is torn down.
+
+
+
+5. DevTools and Debugging Hooks
+Exposed DevTools protocol consistently across both WebContents and WebView. For headless mode, this enabled script-driven automation, while in WebView we had to forward DevTools commands through Android’s embedding layer
+
+
+
+
+
+
+
+
+
+
+Problems Solved in Text Classifier Integration with Chromium
+
+1. Model Export and Compatibility
+We trained the classifier in Python (TensorFlow/Keras) and exported it to TFLite. Early on, the exported model used unsupported ops in Chromium’s build. We fixed this by adjusting the architecture (replacing layers) and ensuring the final model was fully TFLite-compatible.
+
+
+2. Vocabulary Mapping in C++
+The model required integer token IDs as input. Since C++ had to process raw text, we built a consistent vocabulary map and preprocessing pipeline (mirroring Python’s tokenizer) to convert strings into the right integer tensors.
+
+
+3. Tensor Preparation in Chromium
+Filling TFLite input tensors from C++ was tricky because of strict input shapes. We had to implement padding/truncation logic to make sure all input sequences matched the model’s expected length.
+
+
+4. Embedding the Inference Engine
+Chromium doesn’t ship TensorFlow by default. We integrated TFLite as a lightweight inference engine, compiled it inside Chromium, and exposed APIs so WebContents and other components could call into the classifier.
+
+.
