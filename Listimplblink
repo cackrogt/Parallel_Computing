@@ -2225,3 +2225,40 @@ On a page with thousands of elements, you usually only check dozens of rules, no
 This mimics what Brave/AdGuard do internally.
 
 ⚡️ Question for you: Do you want me to also cover where in Blink lifecycle you should call TraverseElements() (e.g. after style recalc vs after layout vs in DidFinishLoad())? That’s important because applying display:none too early or too late will affect paint/relayout cost.
+
+
+
+
+
+
+// document.h
+#include "third_party/blink/renderer/platform/heap/handle.h"
+#include "third_party/blink/renderer/platform/wtf/vector.h"
+
+namespace blink {
+
+class CosmeticRule;
+
+class Document final : public ContainerNode {
+  // ...
+ private:
+  HeapVector<Member<CosmeticRule>> active_rules_;
+  void SetupCosmeticRules();
+};
+
+}  // namespace blink
+
+
+// document.cc
+#include "third_party/blink/renderer/core/dom/cosmetic_rule.h"
+#include "third_party/blink/renderer/core/dom/document.h"
+
+namespace blink {
+
+void Document::SetupCosmeticRules() {
+  // Example: copy all global parsed filters into this doc’s active set.
+  for (auto* rule : kParsedCosmeticFilters)
+    active_rules_.push_back(rule);
+}
+
+}  // namespace blink
