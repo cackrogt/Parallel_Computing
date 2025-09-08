@@ -2262,3 +2262,57 @@ void Document::SetupCosmeticRules() {
 }
 
 }  // namespace blink
+
+
+
+
+
+// cosmetic_rule.h
+#ifndef THIRD_PARTY_BLINK_RENDERER_CORE_DOM_COSMETIC_RULE_H_
+#define THIRD_PARTY_BLINK_RENDERER_CORE_DOM_COSMETIC_RULE_H_
+
+#include "third_party/blink/renderer/platform/wtf/vector.h"
+#include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
+#include "third_party/blink/renderer/platform/heap/handle.h"
+
+namespace blink {
+
+// A single cosmetic filtering rule (GC-managed).
+class CosmeticRule final : public GarbageCollected<CosmeticRule> {
+ public:
+  CosmeticRule(const WTF::Vector<WTF::String>& selectors)
+      : selectors_(selectors) {}
+
+  void Trace(Visitor* visitor) const {
+    // No Member<> fields yet, but keep for future
+  }
+
+  const WTF::Vector<WTF::String>& selectors() const { return selectors_; }
+
+ private:
+  WTF::Vector<WTF::String> selectors_;
+};
+
+}  // namespace blink
+
+#endif  // THIRD_PARTY_BLINK_RENDERER_CORE_DOM_COSMETIC_RULE_H_
+
+
+// cosmetic_filters.cc
+#include "third_party/blink/renderer/core/dom/cosmetic_rule.h"
+
+namespace blink {
+
+// Global parsed cosmetic filter rules.
+// Stored in the heap so Oilpan can trace them.
+HeapVector<Member<CosmeticRule>> kParsedCosmeticFilters;
+
+void SetupCosmeticFilters() {
+  kParsedCosmeticFilters.push_back(
+      MakeGarbageCollected<CosmeticRule>(WTF::Vector<WTF::String>{
+          WTF::String::FromUTF8("div.ad"),
+          WTF::String::FromUTF8("span.tracker"),
+      }));
+}
+
+}  // namespace blink
