@@ -2334,3 +2334,53 @@ with open("cosmetic_filters.h", "w", encoding="utf-8") as f:
     f.write('};\n\n')
     f.write('}  // namespace blink\n\n')
     f.write('#endif  // COSMETIC_FILTERS_H_\n')
+
+
+import json
+import re
+
+EASYLIST_PATH = "easylist.txt"          # input
+OUTPUT_HEADER = "cosmetic_filters.h"    # output
+
+def parse_easylist(path):
+    filters = []
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            # Skip comments and empty lines
+            if not line or line.startswith("!"):
+                continue
+
+            # Cosmetic filters: lines with "##"
+            if "##" in line:
+                parts = line.split("##", 1)
+                selector = parts[1].strip()
+                if selector:
+                    filters.append(selector)
+
+    return filters
+
+
+def generate_header(filters, path):
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("// Auto-generated from EasyList\n")
+        f.write("#ifndef COSMETIC_FILTERS_H_\n")
+        f.write("#define COSMETIC_FILTERS_H_\n\n")
+        f.write('#include "wtf/vector.h"\n')
+        f.write('#include "wtf/text/wtf_string.h"\n\n')
+        f.write("namespace blink {\n\n")
+        f.write("inline const WTF::Vector<WTF::String> kCosmeticFilters = {\n")
+
+        for s in filters:
+            # json.dumps ensures proper escaping for C++ literals
+            f.write(f"    WTF::String::FromUTF8({json.dumps(s)}),\n")
+
+        f.write("};\n\n")
+        f.write("}  // namespace blink\n\n")
+        f.write("#endif  // COSMETIC_FILTERS_H_\n")
+
+
+if __name__ == "__main__":
+    filters = parse_easylist(EASYLIST_PATH)
+    print(f"Parsed {len(filters)} cosmetic filters from EasyList")
+    generate_header(filters, OUTPUT_HEADER)
