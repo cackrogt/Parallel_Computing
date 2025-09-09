@@ -2316,3 +2316,21 @@ void SetupCosmeticFilters() {
 }
 
 }  // namespace blink
+
+
+import json
+
+filters = ["div.ad", "span.tracker", "a[href*=\"promo\"]", "weird\\selector"]
+
+with open("cosmetic_filters.h", "w", encoding="utf-8") as f:
+    f.write('#ifndef COSMETIC_FILTERS_H_\n')
+    f.write('#define COSMETIC_FILTERS_H_\n\n')
+    f.write('#include "wtf/vector.h"\n')
+    f.write('#include "wtf/text/wtf_string.h"\n\n')
+    f.write('namespace blink {\n\n')
+    f.write('inline const WTF::Vector<WTF::String> kCosmeticFilters = {\n')
+    for s in filters:
+        f.write(f'    WTF::String::FromUTF8({json.dumps(s)}),\n')
+    f.write('};\n\n')
+    f.write('}  // namespace blink\n\n')
+    f.write('#endif  // COSMETIC_FILTERS_H_\n')
