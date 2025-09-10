@@ -83,3 +83,18 @@ bool CosmeticRule::Matches(Element* element) const {
 }
 
 }  // namespace blink
+
+void Document::SetupActiveCosmeticFilters() {
+  active_cosmetic_filters_.clear();
+
+  String host = Url().Host();
+
+  for (auto& rule : kParsedCosmeticFilters1) {
+    if (rule->IsException())
+      continue; // handle separately if needed
+
+    if (rule->IsGeneric() || host.EndsWith(rule->Domain())) {
+      active_cosmetic_filters_.push_back(rule);
+    }
+  }
+}
