@@ -146,3 +146,48 @@ void Document::TraverseElements(Element* root) {
       TraverseElements(child);
   }
 }
+
+
+
+#include "third_party/blink/renderer/core/dom/element.h"
+#include "third_party/blink/renderer/core/html_names.h"
+
+namespace blink {
+
+bool CosmeticRule::Matches(Element* element) const {
+  for (const auto& selector : selectors_) {
+    if (selector.StartsWith("#")) {
+      // Match ID selector
+      if (element->getIdAttribute() == selector.Substring(1))
+        return true;
+
+    } else if (selector.StartsWith(".")) {
+      // Match class selector
+      AtomicString class_attr = element->getAttribute(html_names::kClassAttr);
+      if (!class_attr.IsNull() &&
+          class_attr.GetString().Contains(selector.Substring(1)))
+        return true;
+
+    } else if (selector.StartsWith("[")) {
+      // Very basic attribute match: e.g. [style*="content-visibility: visible"]
+      // We look for '*=' substring syntax.
+      wtf_size_t star_eq = selector.Find("*=");
+      if (star_eq != kNotFound) {
+        // Extract attribute name and value inside quotes
+        String attr_name = selector.Substring(1, star_eq - 1).StripWhiteSpace();
+        String value = selector.Substring(star_eq + 2).StripWhiteSpace();
+
+        if (value.StartsWith("\"") && value.EndsWith("\""))
+          value = value.Substring(1, value.length() - 2);  // strip quotes
+
+        AtomicString attr_val = element->getAttribute(AtomicString(attr_name));
+        if (!attr_val.IsNull() && attr_val.GetString().Contains(value))
+          return true;
+      }
+    }
+    // TODO: More cases (full selector matching via SelectorChecker).
+  }
+  return false;
+}
+
+}  // namespace blink
