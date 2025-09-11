@@ -98,3 +98,51 @@ void Document::SetupActiveCosmeticFilters() {
     }
   }
 }
+
+
+bool CosmeticRule::Matches(Element* element) const {
+  // TODO: Replace with Blink's real SelectorChecker later.
+  // For now: simple string comparisons on ID/Class/Style.
+
+  for (const auto& selector : selectors_) {
+    if (selector.StartsWith("#")) {
+      // Match ID
+      if (element->getIdAttribute() == selector.Substring(1))
+        return true;
+    } else if (selector.StartsWith(".")) {
+      // Match class name (split by whitespace)
+      AtomicString class_attr = element->getAttribute(html_names::kClassAttr);
+      if (!class_attr.IsNull() && class_attr.GetString().Contains(selector.Substring(1)))
+        return true;
+    } else if (selector.StartsWith("[")) {
+      // Very naive attribute match, e.g. [style*="foo"]
+      AtomicString style_attr = element->getAttribute(html_names::kStyleAttr);
+      if (!style_attr.IsNull() && style_attr.GetString().Contains("foo"))
+        return true;
+    }
+    // More complex selectors need SelectorChecker.
+  }
+
+  return false;
+}
+
+void Document::TraverseElements(Element* root) {
+  if (!root)
+    return;
+
+  for (Element* el = root; el; el = el->NextElementSibling()) {
+    // Check active cosmetic filters
+    for (auto& rule : active_cosmetic_filters_) {
+      if (rule->Matches(el)) {
+        // Hide element
+        el->setInlineStyleProperty(
+            CSSPropertyDisplay, "none",
+            SecureContextMode::kNotSecureContext);
+      }
+    }
+
+    // Recurse into children
+    if (Element* child = el->firstElementChild())
+      TraverseElements(child);
+  }
+}
