@@ -564,3 +564,64 @@ Filling TFLite input tensors from C++ was tricky because of strict input shapes.
 Chromium doesn’t ship TensorFlow by default. We integrated TFLite as a lightweight inference engine, compiled it inside Chromium, and exposed APIs so WebContents and other components could call into the classifier.
 
 .
+
+
+
+
+
+
+
+
+
+
+
+
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
+
+namespace blink {
+
+HeapHashSet<String>* GetActiveRules() {
+  DEFINE_THREAD_SAFE_STATIC_LOCAL(
+      Persistent<HeapHashSet<String>>, active_rules,
+      (MakeGarbageCollected<HeapHashSet<String>>()));
+  return active_rules.Get();
+}
+
+void InitializeActiveRules() {
+  auto* set = GetActiveRules();
+  set->clear();
+  set->insert("#AC_ad");
+  set->insert(".sponsor");
+}
+
+void Document::TraverseAllElements() {
+  auto* active_rules = GetActiveRules();
+
+  for (Element* element = this->body(); element; element = element->NextElement()) {
+    if (!element->isConnected())
+      continue;
+
+    if (element->HasID()) {
+      String id_selector = "#" + element->IdForStyleResolution().GetString();
+      if (active_rules->Contains(id_selector)) {
+        HideElement(element);
+        continue;
+      }
+    }
+
+    AtomicString class_attr = element->getAttribute(html_names::kClassAttr);
+    if (!class_attr.IsNull()) {
+      Vector<String> classes;
+      class_attr.GetString().Split(' ', classes);
+      for (const auto& cls : classes) {
+        String class_selector = "." + cls;
+        if (active_rules->Contains(class_selector)) {
+          HideElement(element);
+          break;
+        }
+      }
+    }
+  }
+}
+
+}  // namespace blink
