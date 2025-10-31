@@ -1,3 +1,236 @@
+Excellent question — and you’ve hit one of the most nuanced parts of Chrome’s omnibox prerendering design.
+
+Let’s walk through it exactly from a user’s perspective, mapping what Chrome does behind the scenes.
+
+
+---
+
+🧠 The User’s Experience vs. Chrome’s Internal Actions
+
+Let’s say you start typing in the omnibox:
+
+> Example: you type "git"
+
+
+
+The omnibox (address bar) immediately shows suggestions like:
+
+Rank	Suggestion Text	Type	Destination
+
+1️⃣	github.com	Navigation (History)	https://github.com/
+2️⃣	gitlab.com	Navigation (History)	https://gitlab.com/
+3️⃣	git tutorial	Search suggestion	https://www.google.com/search?q=git+tutorial
+4️⃣	git commands cheat sheet	Search suggestion	https://www.google.com/search?q=git+commands+cheat+sheet
+
+
+You only see four text entries — but under the hood, Chrome classifies them into two distinct categories, and prerendering rules depend heavily on that.
+
+
+---
+
+⚙️ Internals: Two Categories
+
+Category	Example	What Chrome Does
+
+Navigation match	github.com (typed URL or known site)	✅ Eligible for prerendering if high confidence
+Search match	git tutorial	❌ Never prerendered, only preconnected (maybe)
+
+
+
+---
+
+🚫 Why Search Suggestions Are Not Prerendered
+
+There are several strong reasons Chrome avoids prerendering multiple text-based (“search”) suggestions:
+
+1. Privacy & Data Leakage:
+Prerendering a search query like "git tutorial" would immediately send that query to Google Search servers before the user presses Enter. That would leak user intent prematurely.
+
+
+2. Resource Explosion:
+Each prerender spins up a hidden renderer process, loads resources, and maintains memory/state. Doing that for even 2–3 concurrent suggestions would crush CPU/RAM.
+
+
+3. Accuracy:
+Chrome’s data (from the AutocompleteActionPredictor table) shows that for textual search inputs, confidence is too low (many possible outcomes).
+So the predictor’s confidence cutoff (≈ 0.8 for prerender) is never reached.
+
+
+4. Security / UX isolation:
+Prerendered content runs JS, may execute redirects, cookies, etc. Allowing arbitrary prerenders of typed search terms is risky.
+
+
+
+
+---
+
+✅ What Actually Happens (Under the Hood)
+
+So here’s the actual chain when you type in omnibox:
+
+Step 1 — User types characters
+
+AutocompleteController asks providers for matches.
+
+Step 2 — AutocompleteActionPredictor::RegisterTransitionalMatches()
+
+Chrome stores the visible matches (URLs + text suggestions) in memory for this typing session.
+
+Step 3 — For each match:
+
+RecommendAction(user_text, match) runs.
+
+Internally, it does something like:
+
+confidence = CalculateConfidence(user_text, match);
+if (confidence >= 0.8f)
+    action = ACTION_PRERENDER;
+else if (confidence >= 0.5f)
+    action = ACTION_PRECONNECT;
+else
+    action = ACTION_NONE;
+
+// Downgrade if not eligible for prerender.
+if (action == ACTION_PRERENDER &&
+   (AutocompleteMatch::IsSearchType(match.type) ||
+    !prerender::IsOmniboxEnabled(profile_))) {
+    action = ACTION_PRECONNECT;
+}
+
+This ensures that search-type matches are never prerendered.
+
+So only matches that:
+
+Have been chosen by the user frequently in the past, and
+
+Point to a real navigational URL, and
+
+Meet the confidence threshold,
+
+
+will get prerendered.
+
+Step 4 — If eligible, only one prerender starts
+
+The predictor calls:
+
+StartPrerendering(best_url, session_storage_namespace, tab_size);
+
+This replaces any ongoing prerender (only one prerender_handle_ exists).
+
+
+---
+
+🧩 So to answer directly:
+
+❓ Are multiple suggestions prerendered simultaneously?
+
+> No. Chrome prerenders at most one page at a time per omnibox context.
+
+
+
+It keeps only one prerender_handle_ alive in AutocompleteActionPredictor.
+
+When a new candidate (higher confidence or different user text) appears, it:
+
+1. Starts a new prerender via AddPrerenderFromOmnibox(),
+
+
+2. Cancels the old one (via old_prerender_handle->OnCancel()).
+
+
+
+This ensures only the top-predicted navigational suggestion gets prerendered.
+
+
+---
+
+❓ What happens to text (search) suggestions?
+
+> They are never prerendered.
+Chrome may preconnect (open TCP/TLS connection) to the search provider, typically www.google.com, to reduce latency when the user presses Enter.
+
+
+
+That’s a lightweight operation — no page load, no request until the user actually submits.
+
+
+---
+
+❓ What about multiple navigational suggestions (e.g. github, gitlab)?
+
+> Even then, only one (the top, most confident one) gets prerendered.
+Others are left untouched or preconnected in parallel if eligible.
+
+
+
+
+---
+
+🧮 Heuristic Summary
+
+Action	Confidence Range	Type Eligible	# of Concurrent
+
+NONE	< 0.5	Any	0
+PRECONNECT	0.5 ≤ conf < 0.8 or search match	URL / Search	multiple possible
+PRERENDER	≥ 0.8	Only navigational URLs	1 (max)
+
+
+
+---
+
+👁️ Observing This in Action
+
+You can actually see this predictor work live:
+
+1. Open Chrome desktop.
+
+
+2. Go to chrome://predictors/
+
+
+3. Under Autocomplete Action Predictor, you’ll see:
+
+User text
+
+URL
+
+Hit count / miss count
+
+Confidence
+
+Last action (Preconnect / Prerender / None)
+
+
+
+
+As you type URLs often (like “g” → “github.com”), Chrome learns and increases confidence; eventually, it starts prerendering that site before you hit Enter.
+
+
+---
+
+🚀 TL;DR
+
+User Typing	Chrome Action
+
+Typing text, seeing search suggestions	No prerenders; may preconnect to search engine
+Typing known URL (github.com)	High-confidence → prerender that page
+Multiple suggestions	At most one prerender; others preconnect or ignored
+Changes input midway	Old prerender canceled, new one possibly started
+
+
+
+---
+
+Would you like me to show how Chrome picks which suggestion becomes the “winner” for prerender (i.e., how it picks among multiple navigational matches)?
+That part involves how CalculateConfidence and ranking in AutocompleteController interact — and it’s quite elegant.
+
+
+
+
+=====================
+
+
 Perfect — this is exactly where things get really interesting.
 
 Let’s peel this apart in detail — how prerendering actually works inside Chromium, and how it relates (and differs) from a normal navigation flow driven by the NavigationController and RenderFrameHostImpl.
