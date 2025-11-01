@@ -1,0 +1,7 @@
+Summary,Description,Issue Type,Priority,Assignee,Reporter,Labels,Due Date,Story Points,Epic Name,Epic Link
+Fix login bug,Users cannot log in after the latest release,Bug,High,john.doe,jane.admin,backend,2025-11-10,3,,
+Implement dark mode,Add dark mode option to user settings,Story,Medium,alex.dev,jane.admin,ui,2025-11-15,5,New App Theme,
+Create landing page,Design and develop marketing landing page,Task,Low,emma.mark,alex.dev,marketing,2025-11-20,2,,
+Improve API performance,Optimize DB queries for faster load times,Story,High,john.doe,jane.admin,backend,2025-11-22,8,,
+Analytics Epic,Main Epic for tracking analytics work,Epic,Medium,,jane.admin,analytics,2025-11-25,,Analytics Epic,
+Add tracking events,Implement tracking for user actions,Story,Medium,alex.dev,jane.admin,analytics,2025-11-28,3,,Analytics Epic
