@@ -1,0 +1,224 @@
+import re
+from dataclasses import dataclass
+from typing import Callable, Dict
+
+import ollama  # pip install ollama
+
+# =========================
+# 1. Tools
+# =========================
+
+def tool_calculator(expression: str) -> str:
+    """
+    Very dumb calculator tool.
+    WARNING: uses eval — only for local experiments, never production.
+    """
+    try:
+        result = eval(expression, {"__builtins__": {}}, {})
+        return f"{result}"
+    except Exception as e:
+        return f"Calculator error: {e}"
+
+WIKI_DB = {
+    "react": "ReAct is a framework where LLMs interleave reasoning traces with actions.",
+    "python": "Python is a high-level programming language.",
+    "llm": "LLM stands for Large Language Model, used for language understanding and generation.",
+}
+
+def tool_wiki(topic: str) -> str:
+    """
+    Tiny fake wiki: just a dict lookup.
+    Great later for injecting adversarial text.
+    """
+    topic_lower = topic.strip().lower()
+    if topic_lower in WIKI_DB:
+        return WIKI_DB[topic_lower]
+    else:
+        return f"No article found for '{topic}'."
+
+TOOLS: Dict[str, Callable[[str], str]] = {
+    "calculator": tool_calculator,
+    "wiki": tool_wiki,
+}
+
+TOOL_DESCRIPTIONS = """
+You have access to the following tools:
+
+1) calculator[expression]
+   - Evaluate a simple math expression, e.g. 2 + 2 * 3
+
+2) wiki[topic]
+   - Look up a short note about a topic, e.g. react, python, llm
+"""
+
+# =========================
+# 2. ReAct prompts
+# =========================
+
+REACT_SYSTEM_PROMPT = f"""
+You are a helpful assistant following the ReAct pattern.
+You must strictly use the following format:
+
+- When you want to think, write:
+  Thought: <your reasoning>
+
+- When you want to use a tool, write EXACTLY:
+  Action: tool_name[tool_input]
+
+  Examples:
+  Action: calculator[2 + 5 * 3]
+  Action: wiki[react]
+
+- When you are ready to answer the user, write:
+  Answer: <your final answer to the user>
+
+Rules:
+- Never invent new tools. Only use: calculator, wiki.
+- Never write Observation: lines. Those are added by the system.
+- Always produce either an Action: ... or Answer: ... at the end.
+
+Available tools:
+{TOOL_DESCRIPTIONS}
+"""
+
+ACTION_RE = re.compile(r"Action:\s*([a-zA-Z_][a-zA-Z0-9_]*)\[(.*)\]\s*")
+
+@dataclass
+class StepResult:
+    done: bool
+    answer: str | None
+    action_tool: str | None
+    action_input: str | None
+    raw_output: str
+
+
+# =========================
+# 3. LLM call via Ollama (gemma:1b)
+# =========================
+
+MODEL_NAME = "gemma:1b"  # you already installed this in Ollama
+
+def call_llm(system_prompt: str, user_prompt: str) -> str:
+    """
+    Call local Ollama model via the official Python client.
+    This hits http://localhost:11434 under the hood.
+    """
+    response = ollama.chat(
+        model=MODEL_NAME,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+    )
+
+    # response['message']['content'] is the assistant text
+    return response["message"]["content"]
+
+
+# =========================
+# 4. ReAct core
+# =========================
+
+def parse_react_output(output: str) -> StepResult:
+    """
+    Parse the LLM output to see if it chose an Action or gave an Answer.
+    """
+    # Look for Answer:
+    answer_match = re.search(r"Answer:\s*(.*)", output, flags=re.DOTALL)
+    if answer_match:
+        answer = answer_match.group(1).strip()
+        return StepResult(
+            done=True,
+            answer=answer,
+            action_tool=None,
+            action_input=None,
+            raw_output=output,
+        )
+
+    # Look for Action:
+    action_match = ACTION_RE.search(output)
+    if action_match:
+        tool_name = action_match.group(1).strip()
+        tool_input = action_match.group(2).strip()
+        return StepResult(
+            done=False,
+            answer=None,
+            action_tool=tool_name,
+            action_input=tool_input,
+            raw_output=output,
+        )
+
+    # Fallback if model doesn't follow format
+    return StepResult(
+        done=True,
+        answer="I could not follow the ReAct format properly.",
+        action_tool=None,
+        action_input=None,
+        raw_output=output,
+    )
+
+
+def run_react_agent(question: str, max_steps: int = 5, verbose: bool = True) -> str:
+    """
+    ReAct loop:
+    - Build trajectory
+    - Ask LLM what to do
+    - Execute Action via a tool (if any)
+    - Append Observation
+    - Stop on Answer
+    """
+    trajectory = f"Question: {question}\n"
+
+    for step in range(1, max_steps + 1):
+        user_prompt = trajectory + "\n"
+
+        if verbose:
+            print("=" * 60)
+            print(f"STEP {step} — PROMPT TO LLM:")
+            print("---- SYSTEM ----")
+            print(REACT_SYSTEM_PROMPT)
+            print("---- USER ----")
+            print(user_prompt)
+            print("=" * 60)
+
+        llm_output = call_llm(REACT_SYSTEM_PROMPT, user_prompt)
+
+        if verbose:
+            print("LLM OUTPUT:")
+            print(llm_output)
+            print("=" * 60)
+
+        step_result = parse_react_output(llm_output)
+        trajectory += step_result.raw_output + "\n"
+
+        if step_result.done:
+            if verbose:
+                print("Agent finished.")
+            return step_result.answer or "No answer."
+
+        # Execute tool action
+        tool_name = step_result.action_tool
+        tool_input = step_result.action_input
+
+        if tool_name not in TOOLS:
+            obs = f"Tool error: unknown tool '{tool_name}'."
+        else:
+            tool_fn = TOOLS[tool_name]
+            obs = tool_fn(tool_input)
+
+        obs_line = f"Observation: {obs}"
+        trajectory += obs_line + "\n"
+
+        if verbose:
+            print(f"TOOL CALLED: {tool_name}[{tool_input}]")
+            print(f"OBSERVATION: {obs}")
+            print("=" * 60)
+
+    return "Max steps reached without a final Answer."
+
+
+if __name__ == "__main__":
+    q = "What is 12 * 7, and what does ReAct mean in LLMs?"
+    final_answer = run_react_agent(q, max_steps=5, verbose=True)
+    print("\nFINAL ANSWER:")
+    print(final_answer)
