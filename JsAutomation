@@ -1,90 +1,37 @@
-(async function () {
+from playwright.sync_api import sync_playwright
+import time
 
-    const urls = [
-        "https://example.com",
-        "https://google.com",
-        "https://wikipedia.org"
-    ];
+urls = [
+    "https://example.com",
+    "https://google.com"
+]
 
-    const waitTime = 15000;
+chrome_path = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
 
-    async function wait(ms) {
-        return new Promise(r => setTimeout(r, ms));
-    }
+with sync_playwright() as p:
 
-    async function screenshot(filename) {
+    browser = p.chromium.launch(
+        executable_path=chrome_path,
+        headless=False
+    )
 
-        const result =
-            await Main.MainImpl.sendOverProtocol(
-                "Page.captureScreenshot",
-                {
-                    format: "png",
-                    fromSurface: true,
-                    captureBeyondViewport: true
-                }
-            );
+    page = browser.new_page(
+        viewport={
+            "width": 390,
+            "height": 844
+        },
+        is_mobile=True
+    )
 
-        const a = document.createElement("a");
+    for i, url in enumerate(urls):
 
-        a.href =
-            "data:image/png;base64," +
-            result.data;
+        page.goto(url)
 
-        a.download = filename;
+        time.sleep(15)
 
-        a.click();
-    }
+        page.screenshot(
+            path=f"screenshot_{i+1}.png",
+            full_page=True
+        )
 
-    for (let i = 0; i < urls.length; i++) {
-
-        const url = urls[i];
-
-        console.log("Opening:", url);
-
-        // Navigate via protocol
-        await Main.MainImpl.sendOverProtocol(
-            "Page.navigate",
-            { url }
-        );
-
-        console.log("Waiting for load...");
-
-        // wait for load event
-        await new Promise(resolve => {
-
-            const listener = (event) => {
-
-                if (event.method === "Page.loadEventFired") {
-
-                    ProtocolClient.InspectorBackend.test
-                        .removeEventListener(listener);
-
-                    resolve();
-                }
-            };
-
-            ProtocolClient.InspectorBackend.test
-                .addEventListener(listener);
-        });
-
-        console.log("Loaded");
-
-        // extra wait
-        await wait(waitTime);
-
-        const filename =
-            `${i + 1}_` +
-            url.replace(/https?:\/\//, "")
-               .replace(/[^\w]/g, "_") +
-            ".png";
-
-        console.log("Capturing:", filename);
-
-        await screenshot(filename);
-
-        await wait(3000);
-    }
-
-    console.log("DONE");
-
-})();
+    browser.close()
