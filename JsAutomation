@@ -8,8 +8,32 @@
 
     const waitTime = 15000;
 
-    // DevTools internal API
-    const target = SDK.targetManager.mainTarget();
+    async function wait(ms) {
+        return new Promise(r => setTimeout(r, ms));
+    }
+
+    async function screenshot(filename) {
+
+        const result =
+            await Main.MainImpl.sendOverProtocol(
+                "Page.captureScreenshot",
+                {
+                    format: "png",
+                    fromSurface: true,
+                    captureBeyondViewport: true
+                }
+            );
+
+        const a = document.createElement("a");
+
+        a.href =
+            "data:image/png;base64," +
+            result.data;
+
+        a.download = filename;
+
+        a.click();
+    }
 
     for (let i = 0; i < urls.length; i++) {
 
@@ -17,53 +41,48 @@
 
         console.log("Opening:", url);
 
-        // Navigate using DevTools protocol
-        await target.pageAgent().navigate(url);
+        // Navigate via protocol
+        await Main.MainImpl.sendOverProtocol(
+            "Page.navigate",
+            { url }
+        );
 
-        // Wait for page load
+        console.log("Waiting for load...");
+
+        // wait for load event
         await new Promise(resolve => {
-            target.model(SDK.ResourceTreeModel)
-                .addEventListener(
-                    SDK.ResourceTreeModel.Events.Load,
-                    resolve,
-                    { once: true }
-                );
+
+            const listener = (event) => {
+
+                if (event.method === "Page.loadEventFired") {
+
+                    ProtocolClient.InspectorBackend.test
+                        .removeEventListener(listener);
+
+                    resolve();
+                }
+            };
+
+            ProtocolClient.InspectorBackend.test
+                .addEventListener(listener);
         });
 
-        console.log("Loaded:", url);
+        console.log("Loaded");
 
-        // Wait extra 15 sec
-        await new Promise(r => setTimeout(r, waitTime));
+        // extra wait
+        await wait(waitTime);
 
-        console.log("Capturing screenshot...");
-
-        // Capture screenshot
-        const result =
-            await target.pageAgent().captureScreenshot({
-                format: "png",
-                fromSurface: true,
-                captureBeyondViewport: true
-            });
-
-        // Download
-        const a = document.createElement("a");
-
-        a.href =
-            "data:image/png;base64," +
-            result.data;
-
-        a.download =
+        const filename =
             `${i + 1}_` +
             url.replace(/https?:\/\//, "")
                .replace(/[^\w]/g, "_") +
             ".png";
 
-        a.click();
+        console.log("Capturing:", filename);
 
-        console.log("Saved screenshot");
+        await screenshot(filename);
 
-        // Small pause
-        await new Promise(r => setTimeout(r, 3000));
+        await wait(3000);
     }
 
     console.log("DONE");
