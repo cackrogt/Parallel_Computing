@@ -1,21 +1,23 @@
-window.urls = [
-  "https://example.com",
-  "https://google.com",
-  "https://wikipedia.org"
+const urls = [
+    "https://example.com",
+    "https://google.com",
+    "https://wikipedia.org"
 ];
 
-window.currentIndex = 0;
+const WAIT_TIME = 15000;
 
-async function runSites() {
+(async () => {
 
-    while (window.currentIndex < window.urls.length) {
+    for (let i = 0; i < urls.length; i++) {
 
-        const url = window.urls[window.currentIndex];
+        const url = urls[i];
 
-        console.log("Opening", url);
+        console.log("Opening:", url);
 
+        // Navigate
         location.href = url;
 
+        // Wait for full load
         await new Promise(resolve => {
             window.addEventListener(
                 "load",
@@ -24,97 +26,37 @@ async function runSites() {
             );
         });
 
-        await new Promise(r => setTimeout(r, 15000));
+        console.log("Waiting 15 seconds...");
 
-        alert(
-            "Take screenshot now.\n\n" +
-            "Press:\n" +
-            "Ctrl+Shift+P\n" +
-            "Type: screenshot\n" +
-            "Enter\n\n" +
-            "Then click OK for next site."
+        await new Promise(r =>
+            setTimeout(r, WAIT_TIME)
         );
 
-        window.currentIndex++;
-    }
+        // Built-in DevTools screenshot command
+        console.log("Take screenshot now");
 
-    alert("Done");
-}
-
-runSites();
-
-
-(async () => {
-
-    // ===== CONFIG =====
-    const URLS = [
-        "https://example.com",
-        "https://google.com",
-        "https://wikipedia.org"
-    ];
-
-    const WAIT_TIME = 15000;
-    // ==================
-
-    // Persist state across navigations
-    if (!localStorage.siteRunnerState) {
-
-        localStorage.siteRunnerState = JSON.stringify({
-            index: 0,
-            urls: URLS
+        // Trigger command menu automatically
+        const event = new KeyboardEvent('keydown', {
+            key: 'P',
+            code: 'KeyP',
+            ctrlKey: true,
+            shiftKey: true,
+            bubbles: true
         });
 
-        console.log("State initialized");
-    }
-
-    const state = JSON.parse(localStorage.siteRunnerState);
-
-    // Finished?
-    if (state.index >= state.urls.length) {
-
-        console.log("ALL DONE");
-        localStorage.removeItem("siteRunnerState");
-        return;
-    }
-
-    const currentUrl = state.urls[state.index];
-
-    // If not already on target URL -> navigate
-    if (location.href !== currentUrl) {
-
-        console.log("Navigating to:", currentUrl);
-
-        location.href = currentUrl;
-        return;
-    }
-
-    // Already on correct page
-    console.log("Loaded:", currentUrl);
-
-    setTimeout(() => {
+        document.dispatchEvent(event);
 
         alert(
-            `Take screenshot now for:\n\n${currentUrl}\n\n` +
-            `Press Ctrl+Shift+P\n` +
-            `Type: screenshot`
+            "Type: screenshot\n" +
+            "Press Enter"
         );
 
-        state.index++;
+        // small delay
+        await new Promise(r =>
+            setTimeout(r, 3000)
+        );
+    }
 
-        localStorage.siteRunnerState =
-            JSON.stringify(state);
-
-        // Move next
-        if (state.index < state.urls.length) {
-
-            location.href = state.urls[state.index];
-
-        } else {
-
-            alert("ALL SITES DONE");
-            localStorage.removeItem("siteRunnerState");
-        }
-
-    }, WAIT_TIME);
+    alert("DONE");
 
 })();
