@@ -1,12 +1,15 @@
-const urls = [
-    "https://example.com",
-    "https://google.com",
-    "https://wikipedia.org"
-];
+(async function () {
 
-const WAIT_TIME = 15000;
+    const urls = [
+        "https://example.com",
+        "https://google.com",
+        "https://wikipedia.org"
+    ];
 
-(async () => {
+    const waitTime = 15000;
+
+    // DevTools internal API
+    const target = SDK.targetManager.mainTarget();
 
     for (let i = 0; i < urls.length; i++) {
 
@@ -14,49 +17,55 @@ const WAIT_TIME = 15000;
 
         console.log("Opening:", url);
 
-        // Navigate
-        location.href = url;
+        // Navigate using DevTools protocol
+        await target.pageAgent().navigate(url);
 
-        // Wait for full load
+        // Wait for page load
         await new Promise(resolve => {
-            window.addEventListener(
-                "load",
-                () => resolve(),
-                { once: true }
-            );
+            target.model(SDK.ResourceTreeModel)
+                .addEventListener(
+                    SDK.ResourceTreeModel.Events.Load,
+                    resolve,
+                    { once: true }
+                );
         });
 
-        console.log("Waiting 15 seconds...");
+        console.log("Loaded:", url);
 
-        await new Promise(r =>
-            setTimeout(r, WAIT_TIME)
-        );
+        // Wait extra 15 sec
+        await new Promise(r => setTimeout(r, waitTime));
 
-        // Built-in DevTools screenshot command
-        console.log("Take screenshot now");
+        console.log("Capturing screenshot...");
 
-        // Trigger command menu automatically
-        const event = new KeyboardEvent('keydown', {
-            key: 'P',
-            code: 'KeyP',
-            ctrlKey: true,
-            shiftKey: true,
-            bubbles: true
-        });
+        // Capture screenshot
+        const result =
+            await target.pageAgent().captureScreenshot({
+                format: "png",
+                fromSurface: true,
+                captureBeyondViewport: true
+            });
 
-        document.dispatchEvent(event);
+        // Download
+        const a = document.createElement("a");
 
-        alert(
-            "Type: screenshot\n" +
-            "Press Enter"
-        );
+        a.href =
+            "data:image/png;base64," +
+            result.data;
 
-        // small delay
-        await new Promise(r =>
-            setTimeout(r, 3000)
-        );
+        a.download =
+            `${i + 1}_` +
+            url.replace(/https?:\/\//, "")
+               .replace(/[^\w]/g, "_") +
+            ".png";
+
+        a.click();
+
+        console.log("Saved screenshot");
+
+        // Small pause
+        await new Promise(r => setTimeout(r, 3000));
     }
 
-    alert("DONE");
+    console.log("DONE");
 
 })();
