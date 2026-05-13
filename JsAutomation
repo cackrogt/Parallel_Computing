@@ -15,23 +15,33 @@ with sync_playwright() as p:
         headless=False
     )
 
-    page = browser.new_page(
-        viewport={
-            "width": 390,
-            "height": 844
-        },
-        is_mobile=True
+    # Real mobile emulation
+    iphone = p.devices["iPhone 13"]
+
+    context = browser.new_context(
+        **iphone
     )
+
+    page = context.new_page()
 
     for i, url in enumerate(urls):
 
-        page.goto(url)
+        print(f"Opening {url}")
+
+        page.goto(
+            url,
+            wait_until="networkidle"
+        )
 
         time.sleep(15)
 
+        filename = f"screenshot_{i+1}.png"
+
         page.screenshot(
-            path=f"screenshot_{i+1}.png",
+            path=filename,
             full_page=True
         )
+
+        print(f"Saved {filename}")
 
     browser.close()
