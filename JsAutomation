@@ -1,0 +1,44 @@
+window.urls = [
+  "https://example.com",
+  "https://google.com",
+  "https://wikipedia.org"
+];
+
+window.currentIndex = 0;
+
+async function runSites() {
+
+    while (window.currentIndex < window.urls.length) {
+
+        const url = window.urls[window.currentIndex];
+
+        console.log("Opening", url);
+
+        location.href = url;
+
+        await new Promise(resolve => {
+            window.addEventListener(
+                "load",
+                () => resolve(),
+                { once: true }
+            );
+        });
+
+        await new Promise(r => setTimeout(r, 15000));
+
+        alert(
+            "Take screenshot now.\n\n" +
+            "Press:\n" +
+            "Ctrl+Shift+P\n" +
+            "Type: screenshot\n" +
+            "Enter\n\n" +
+            "Then click OK for next site."
+        );
+
+        window.currentIndex++;
+    }
+
+    alert("Done");
+}
+
+runSites();
